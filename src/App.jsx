@@ -229,6 +229,99 @@ function Config({ toast }) {
   );
 }
 
+
+// ── Comment Rules Panel ──────────────────────────────────────────────────────
+function CommentRules({ toast }) {
+  const [rules, setRules] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [keyword, setKeyword] = useState('');
+  const [replyDm, setReplyDm] = useState('');
+  const [replyComment, setReplyComment] = useState('');
+  const [postId, setPostId] = useState('');
+
+  const load = useCallback(async () => {
+    const r = await sb('ig_comment_rules?select=*&order=created_at.desc');
+    setRules(r);
+    try {
+      const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption&limit=10&access_token=${IG_TOKEN}`);
+      const data = await res.json();
+      setPosts(data.data || []);
+    } catch(e) {}
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!replyDm) { toast('Inserisci il messaggio DM'); return; }
+    await sb('ig_comment_rules', { method: 'POST', body: { keyword: keyword.toLowerCase().trim() || null, reply_dm: replyDm, reply_comment: replyComment || null, post_id: postId || null, is_active: true } });
+    setKeyword(''); setReplyDm(''); setReplyComment(''); setPostId('');
+    toast('Regola aggiunta!'); load();
+  };
+
+  const toggle = async (id, val) => { await sb(`ig_comment_rules?id=eq.${id}`, { method: 'PATCH', body: { is_active: val } }); load(); };
+  const del = async (id) => { if (!window.confirm('Eliminare?')) return; await sb(`ig_comment_rules?id=eq.${id}`, { method: 'DELETE', prefer: '' }); toast('Eliminata'); load(); };
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h1><i className="ti ti-message-forward" /> Auto-DM da commenti</h1>
+        <span className="badge badge-green"><i className="ti ti-bolt" /> Attivo</span>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Quando qualcuno commenta un tuo post con una parola chiave, riceve automaticamente un DM privato.</span>
+      </div>
+      <div className="two-col">
+        <div>
+          <div className="section-title">Regole attive ({rules.length})</div>
+          <div className="card list-card">
+            {!rules.length && <div className="empty">Nessuna regola ancora</div>}
+            {rules.map(r => (
+              <div key={r.id} className="list-row">
+                <div className="flow-icon-wrap" style={{ background: '#f472b622', color: '#f472b6' }}><i className="ti ti-message-forward" /></div>
+                <div className="list-info">
+                  <span className="list-name">{r.keyword ? `Keyword: "${r.keyword}"` : 'Qualsiasi commento'}</span>
+                  <span className="list-meta">DM: {r.reply_dm} {r.post_id ? '· Post specifico' : '· Tutti i post'}</span>
+                  <span className="list-meta" style={{color:'var(--accent2)'}}>{r.trigger_count} trigger</span>
+                </div>
+                <div className="list-actions">
+                  <Toggle on={r.is_active} onChange={v => toggle(r.id, v)} />
+                  <button className="icon-btn danger" onClick={() => del(r.id)}><i className="ti ti-trash" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="section-title">Nuova regola</div>
+          <div className="card form-card">
+            <div className="form-group">
+              <label>Parola chiave nel commento (opzionale)</label>
+              <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="es. link, info — vuoto = tutti i commenti" />
+            </div>
+            <div className="form-group">
+              <label>Post specifico (opzionale)</label>
+              <select value={postId} onChange={e => setPostId(e.target.value)}>
+                <option value="">Tutti i post</option>
+                {posts.map(p => <option key={p.id} value={p.id}>{(p.caption || 'Post senza caption').slice(0, 40)}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Messaggio DM automatico</label>
+              <textarea value={replyDm} onChange={e => setReplyDm(e.target.value)} placeholder="Ciao! Grazie per il commento, ecco il link che cercavi..." />
+            </div>
+            <div className="form-group">
+              <label>Risposta pubblica al commento (opzionale)</label>
+              <input value={replyComment} onChange={e => setReplyComment(e.target.value)} placeholder="es. Ti ho mandato un DM!" />
+            </div>
+            <button className="btn btn-primary" onClick={save} style={{ width: '100%' }}><i className="ti ti-plus" /> Aggiungi regola</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
@@ -256,6 +349,7 @@ export default function App() {
     { id: 'flows', icon: 'git-branch', label: 'Flow' },
     { id: 'keywords', icon: 'tag', label: 'Parole chiave' },
     { id: 'leads', icon: 'users', label: 'Lead' },
+    { id: 'comments', icon: 'message-forward', label: 'Auto-DM commenti' },
     { id: 'config', icon: 'settings', label: 'Configurazione' },
   ];
 
@@ -277,6 +371,7 @@ export default function App() {
         {panel === 'flows' && <Flows toast={toast} />}
         {panel === 'keywords' && <Keywords toast={toast} />}
         {panel === 'leads' && <Leads toast={toast} />}
+        {panel === 'comments' && <CommentRules toast={toast} />}
         {panel === 'config' && <Config toast={toast} />}
       </main>
       <Toast msg={toastMsg} onHide={() => setToastMsg('')} />
