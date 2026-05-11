@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { sb } from './supabase';
 import './App.css';
 
-const IG_TOKEN = 'IGAAONH3T1zM9BZAGJPc1pWbExDRnNtNFV1M0xQNUUtVHljTEI3dW1CWlo2aXE4MVV2bjl0V3U2ekN3QkJtNmV3UUI5OVBuaEZAsZA3F6cFgzNXNTYkJZATTBFbWlsSnEya1pqWjN0R1BEV2djYlRBOHNjbzV4QlotY191bDJMWVNOVQZDZD';
+const IG_TOKEN = 'IGAAONH3T1zM9BZAGI1UmVYcEhjQmt4ZAXB4aWQzWDBxQzhodjUyWi05M3p2dDlYd1hod0pmMkNvdGxaTUF3NjI0VXUwT01PcHZAXTW8zRDBXVHZA4S21ZAczRyWnVwVTVuYUI1THI3b0c0aTJtWElsV1huNG5R';
 const IG_USER_ID = '959429044971851';
 
 function Toast({ msg, onHide }) {
