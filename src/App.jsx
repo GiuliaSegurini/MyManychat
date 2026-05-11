@@ -36,7 +36,7 @@ function Posts({ toast }) {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch(`https://graph.facebook.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=20&access_token=${IG_TOKEN}`);
+        const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=20&access_token=${IG_TOKEN}`);
         const data = await res.json();
         setPosts(data.data || []);
       } catch (e) { toast('Errore caricamento post'); }
@@ -243,7 +243,7 @@ export default function App() {
         setStats({ flows: flows.length, leads: leads.length, keywords: kws.length, messages: msgs.length });
       } catch (e) { console.error(e); }
       try {
-        const res = await fetch(`https://graph.facebook.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=6&access_token=${IG_TOKEN}`);
+        const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=6&access_token=${IG_TOKEN}`);
         const data = await res.json();
         setPosts(data.data || []);
       } catch (e) { console.error(e); }
