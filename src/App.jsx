@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { sb } from './supabase';
 import './App.css';
 
-const IG_TOKEN = 'IGAAONH3T1zM9BZAGI1UmVYcEhjQmt4ZAXB4aWQzWDBxQzhodjUyWi05M3p2dDlYd1hod0pmMkNvdGxaTUF3NjI0VXUwT01PcHZAXTW8zRDBXVHZA4S21ZAczRyWnVwVTVuYUI1THI3b0c0aTJtWElsV1huNG5R';
-const IG_USER_ID = '959429044971851';
+const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGNJRkRsck9zSS0wemFtTFl5bHdDWWt2ZAmRudkI2ZA2s1WC1XWGZASMHBSMjJvUmYxX2NsU2RWUDV2QXZA0VTVDX0JzOWY0a2xsZA0h6ZA3RTa3VTUVRoOTZAISQZDZD';
+const IG_USER_ID = '26770455472615914';
 
 function Toast({ msg, onHide }) {
   useEffect(() => { if (msg) { const t = setTimeout(onHide, 2400); return () => clearTimeout(t); } }, [msg, onHide]);
