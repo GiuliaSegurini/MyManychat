@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://yywcqmowpsejlunzoyli.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5d2NxbW93cHNlamx1bnpveWxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU2MDcyOTcsImV4cCI6MjA2MTE4MzI5N30.BknCR4SqKqTT-LuB7n13FmRXU4l0HKMpTWDiBaCXarU';
+const SUPABASE_KEY = 'sb_publishable_l6V6WAxjXN9qXZPbtN772w_AS0UKDX0';
 
 export const sb = async (path, opts = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -7,7 +7,7 @@ export const sb = async (path, opts = {}) => {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: opts.prefer || 'return=representation',
+      Prefer: opts.prefer !== undefined ? opts.prefer : 'return=representation',
       ...opts.headers,
     },
     method: opts.method || 'GET',
