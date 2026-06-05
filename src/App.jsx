@@ -96,7 +96,7 @@ function Posts({ toast }) {
 
       toast(`${frames.length} frame estratti, analisi AI...`);
 
-      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video`, {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
