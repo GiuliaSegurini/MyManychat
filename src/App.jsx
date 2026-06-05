@@ -51,58 +51,16 @@ function Posts({ toast }) {
   const analyzeVideo = async (post) => {
     if (analyzing[post.id]) return;
     setAnalyzing(a => ({ ...a, [post.id]: true }));
-    toast('Estrazione frame...');
+    toast('Analisi AI in corso...');
 
     try {
-      const frames = await new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.crossOrigin = 'anonymous';
-        video.muted = true;
-        video.preload = 'auto';
-        video.src = post.media_url;
-
-        video.addEventListener('error', () => reject(new Error('Errore caricamento video')));
-
-        video.addEventListener('loadedmetadata', async () => {
-          const duration = video.duration;
-          const interval = Math.max(2, Math.floor(duration / 6));
-          const times = [];
-          for (let t = 0; t < duration; t += interval) {
-            times.push(Math.min(t, duration - 0.1));
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = 512;
-          canvas.height = 512;
-          const ctx = canvas.getContext('2d');
-          const extractedFrames = [];
-
-          for (const time of times.slice(0, 6)) {
-            await new Promise(res => {
-              video.currentTime = time;
-              video.addEventListener('seeked', () => {
-                ctx.drawImage(video, 0, 0, 512, 512);
-                const b64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-                extractedFrames.push(b64);
-                res();
-              }, { once: true });
-            });
-          }
-          resolve(extractedFrames);
-        });
-
-        video.load();
-      });
-
-      toast(`${frames.length} frame estratti, analisi AI...`);
-
-      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ post_id: post.id, frames }),
+        body: JSON.stringify({ post_id: post.id, thumbnail_url: post.thumbnail_url }),
       });
 
       const data = await res.json();
