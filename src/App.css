@@ -1,162 +1,474 @@
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0f0f13;--bg2:#16161d;--bg3:#1e1e28;--bg4:#252533;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
-  --text:#eeeef5;--text2:#9896b4;--text3:#55536e;
-  --accent:#6c63ff;--accent2:#9d97ff;--accent-bg:rgba(108,99,255,0.13);
-  --green:#4ade80;--green-bg:rgba(74,222,128,0.1);
-  --amber:#fbbf24;--amber-bg:rgba(251,191,36,0.1);
-  --red:#f87171;--red-bg:rgba(248,113,113,0.1);
-  --pink:#f472b6;--pink-bg:rgba(244,114,182,0.1);
-  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
-  --radius:10px;--radius-lg:14px;
+import React, { useState, useEffect, useCallback } from 'react';
+import { sb } from './supabase';
+import './App.css';
+
+const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGNJRkRsck9zSS0wemFtTFl5bHdDWWt2ZAmRudkI2ZA2s1WC1XWGZASMHBSMjJvUmYxX2NsU2RWUDV2QXZA0VTVDX0JzOWY0a2xsZA0h6ZA3RTa3VTUVRoOTZAISQZDZD';
+const IG_USER_ID = '26770455472615914';
+const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
+
+function Toast({ msg, onHide }) {
+  useEffect(() => { if (msg) { const t = setTimeout(onHide, 2400); return () => clearTimeout(t); } }, [msg, onHide]);
+  return <div className={`toast ${msg ? 'show' : ''}`}>{msg}</div>;
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-input,textarea,select{font-family:var(--font);font-size:13px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:8px 12px;width:100%;outline:none;transition:border-color 0.15s}
-input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,99,255,0.12)}
-textarea{resize:vertical;min-height:72px}
-select option{background:var(--bg3)}
-button{font-family:var(--font);cursor:pointer}
-a{color:inherit;text-decoration:none}
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+function Badge({ children, color = 'purple' }) {
+  return <span className={`badge badge-${color}`}>{children}</span>;
+}
+function Toggle({ on, onChange }) {
+  return <button className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}><span className="thumb" /></button>;
+}
+function Modal({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (
+    <div className="modal-bg" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <div className="modal-header"><span className="modal-title">{title}</span><button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-.app{display:flex;height:100vh;overflow:hidden}
+function Posts({ toast }) {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [analyzing, setAnalyzing] = useState({});
+  const [analyses, setAnalyses] = useState({});
 
-/* Sidebar */
-.sidebar{width:224px;min-width:224px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column}
-.sidebar-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.logo-icon{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#6c63ff,#a855f7);display:flex;align-items:center;justify-content:center;font-size:17px;color:white;flex-shrink:0}
-.logo-name{font-size:15px;font-weight:600;letter-spacing:-.2px}
-.logo-sub{font-size:10px;color:var(--text3);margin-top:1px}
-.sidebar-nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:1px;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:var(--radius);border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.12s;text-align:left;width:100%}
-.nav-item:hover{background:var(--bg3);color:var(--text)}
-.nav-item.active{background:var(--accent-bg);color:var(--accent2)}
-.nav-item i{font-size:16px;flex-shrink:0}
-.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text3)}
-.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--green)}50%{box-shadow:0 0 12px var(--green)}}
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=20&access_token=${IG_TOKEN}`);
+        const data = await res.json();
+        setPosts(data.data || []);
+      } catch (e) { toast('Errore caricamento post'); }
+      setLoading(false);
+    })();
+  }, [toast]);
 
-/* Main */
-.main{flex:1;overflow-y:auto;background:var(--bg)}
+  const analyzeVideo = async (post) => {
+    if (analyzing[post.id]) return;
+    setAnalyzing(a => ({ ...a, [post.id]: true }));
+    toast('Analisi AI in corso...');
 
-/* Panel */
-.panel{padding:28px 32px;max-width:1100px}
-.panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
-.panel-header h1{font-size:20px;font-weight:600;display:flex;align-items:center;gap:8px}
-.panel-header h1 i{color:var(--text3)}
-.count-badge{font-size:12px;font-weight:500;color:var(--text3);background:var(--bg3);padding:2px 8px;border-radius:20px}
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ post_id: post.id, thumbnail_url: post.thumbnail_url }),
+      });
 
-/* Stats */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
-.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;display:flex;align-items:center;gap:14px;transition:border-color .15s}
-.stat-card:hover{border-color:var(--border2)}
-.stat-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
-.stat-value{font-size:24px;font-weight:700;letter-spacing:-.5px}
-.stat-label{font-size:12px;color:var(--text2);margin-top:1px}
-.stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
+      const data = await res.json();
 
-.section-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+      if (data.success) {
+        setAnalyses(a => ({ ...a, [post.id]: data.analysis }));
+        toast('✅ Analisi completata!');
+      } else {
+        toast('Errore: ' + (data.error || 'sconosciuto'));
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Errore: ' + e.message);
+    }
 
-/* Card */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:16px;overflow:hidden}
-.form-card{padding:16px}
-.list-card{}
+    setAnalyzing(a => ({ ...a, [post.id]: false }));
+  };
 
-/* List rows */
-.list-row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;transition:background .1s}
-.list-row:last-child{border-bottom:none}
-.list-row:hover{background:var(--bg3)}
-.flow-row{cursor:pointer}
-.list-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.list-name{font-size:13px;font-weight:500}
-.list-meta{font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.list-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.flow-icon-wrap{width:32px;height:32px;border-radius:8px;background:var(--accent-bg);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.flow-steps-wrap{width:100%;padding:10px 16px 14px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--border);background:var(--bg3)}
-.step-pill{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2)}
-.step-num{width:20px;height:20px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.kw-tag{background:var(--accent-bg);color:var(--accent2);font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;white-space:nowrap;flex-shrink:0}
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1><i className="ti ti-photo" /> Post Instagram</h1><Badge color="green">@neuroplasticity_training</Badge></div>
+      {loading && <div className="posts-grid">{[...Array(9)].map((_, i) => <div key={i} className="post-skeleton" />)}</div>}
+      <div className="posts-grid">
+        {posts.map(p => (
+          <div key={p.id} className={`post-card ${selected === p.id ? 'selected' : ''}`} onClick={() => setSelected(selected === p.id ? null : p.id)}>
+            <div className="post-img-wrap">
+              {p.media_type === 'VIDEO' ? <video src={p.media_url} className="post-img" muted /> : <img src={p.media_url || p.thumbnail_url} alt="" className="post-img" />}
+              {p.media_type === 'VIDEO' && <div className="post-type-badge"><i className="ti ti-player-play" /></div>}
+              {p.media_type === 'CAROUSEL_ALBUM' && <div className="post-type-badge"><i className="ti ti-stack-2" /></div>}
+              <div className="post-overlay"><span><i className="ti ti-heart" /> {p.like_count || 0}</span><span><i className="ti ti-message-circle" /> {p.comments_count || 0}</span></div>
+            </div>
+            {selected === p.id && (
+              <div className="post-detail">
+                <p className="post-caption">{p.caption || 'Nessuna caption'}</p>
+                <div className="post-meta-row">
+                  <span className="post-date">{new Date(p.timestamp).toLocaleDateString('it')}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <a href={p.permalink} target="_blank" rel="noreferrer" className="btn btn-sm"><i className="ti ti-external-link" /> Apri</a>
+                    {p.media_type === 'VIDEO' && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={e => { e.stopPropagation(); analyzeVideo(p); }}
+                        disabled={analyzing[p.id]}
+                        style={{ opacity: analyzing[p.id] ? 0.6 : 1 }}
+                      >
+                        {analyzing[p.id]
+                          ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Analisi...</>
+                          : <><i className="ti ti-scan" /> Analizza</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-/* Posts grid */
-.posts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:20px}
-.post-card{position:relative;cursor:pointer;background:var(--bg2);border-radius:4px;overflow:hidden;transition:transform .15s}
-.post-img-wrap{position:relative;padding-bottom:100%;overflow:hidden}
-.post-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .2s}
-.post-card:hover .post-img{transform:scale(1.03)}
-.post-type-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px}
-.post-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;gap:16px;color:white;font-size:13px;font-weight:600;opacity:0;transition:opacity .2s}
-.post-card:hover .post-overlay{opacity:1}
-.post-card.selected .post-overlay{opacity:1;background:rgba(108,99,255,.4)}
-.post-detail{padding:12px;background:var(--bg3);border-top:1px solid var(--border)}
-.post-caption{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.post-meta-row{display:flex;align-items:center;justify-content:space-between}
-.post-date{font-size:11px;color:var(--text3)}
-.post-skeleton{padding-bottom:100%;background:var(--bg2);border-radius:4px;animation:shimmer 1.5s infinite}
-@keyframes shimmer{0%,100%{opacity:.4}50%{opacity:.8}}
-.post-thumb{width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0}
+                {analyses[p.id] && (
+                  <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {analyses[p.id].summary && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>📝 </span>
+                        {analyses[p.id].summary}
+                      </div>
+                    )}
+                    {analyses[p.id].scenes?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>SCENE</span>
+                        {analyses[p.id].scenes.map((s, i) => <span key={i} className="badge badge-purple">{s}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].objects?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>OGGETTI</span>
+                        {[...new Set(analyses[p.id].objects.flatMap(o => o.tags))].map((tag, i) => (
+                          <span key={i} className="badge badge-gray">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    {analyses[p.id].colors?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>COLORI</span>
+                        {analyses[p.id].colors.map((c, i) => <span key={i} className="badge badge-amber">{c}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].text_detected?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>TESTO NEL VIDEO</span>
+                        {analyses[p.id].text_detected.map((t, i) => <span key={i} className="badge badge-green">{t}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].mood && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>MOOD</span>
+                        <span className="badge badge-pink">{analyses[p.id].mood}</span>
+                        {analyses[p.id].content_type && <span className="badge badge-purple">{analyses[p.id].content_type}</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-/* Leads */
-.lead-header{display:grid;grid-template-columns:1fr 1fr 90px 80px;gap:12px;padding:10px 16px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border)}
-.lead-row{display:grid;grid-template-columns:1fr 1fr 90px 80px;gap:12px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);font-size:13px;transition:background .1s}
-.lead-row:last-child{border-bottom:none}
-.lead-row:hover{background:var(--bg3)}
-.lead-name{display:flex;align-items:center;gap:8px}
-.lead-email{color:var(--text3);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lead-date{color:var(--text3);font-size:11px}
-.avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+function Dashboard({ stats, posts }) {
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1>Dashboard</h1><Badge color="green"><i className="ti ti-circle-check" /> Live</Badge></div>
+      <div className="stats-grid">
+        {[['Messaggi','send','#7c6af7',stats.messages,'outbound DM'],['Lead','users','#4ade80',stats.leads,'da Instagram'],['Flow attivi','git-branch','#fbbf24',stats.flows,'automazioni'],['Keyword','tag','#f472b6',stats.keywords,'rispondono ai DM']].map(([label,icon,color,value,sub]) => (
+          <div key={label} className="stat-card">
+            <div className="stat-icon" style={{ background: color + '22', color }}><i className={`ti ti-${icon}`} /></div>
+            <div><div className="stat-value">{value ?? '—'}</div><div className="stat-label">{label}</div><div className="stat-sub">{sub}</div></div>
+          </div>
+        ))}
+      </div>
+      <div className="two-col" style={{ gap: 16 }}>
+        <div>
+          <div className="section-title">Ultimi post</div>
+          <div className="card">
+            {!posts.length && <div className="empty">Caricamento post...</div>}
+            {posts.slice(0, 4).map(p => (
+              <div key={p.id} className="list-row">
+                <img src={p.media_url || p.thumbnail_url} alt="" className="post-thumb" />
+                <div className="list-info">
+                  <span className="list-name">{(p.caption || 'Senza caption').slice(0, 50)}{(p.caption || '').length > 50 ? '…' : ''}</span>
+                  <span className="list-meta"><i className="ti ti-heart" /> {p.like_count || 0} &nbsp;<i className="ti ti-message-circle" /> {p.comments_count || 0} &nbsp; {new Date(p.timestamp).toLocaleDateString('it')}</span>
+                </div>
+                <a href={p.permalink} target="_blank" rel="noreferrer" className="icon-btn"><i className="ti ti-external-link" /></a>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="section-title">Stato sistema</div>
+          <div className="card">
+            {[['Account','@neuroplasticity_training ✓'],['Webhook','ig-webhook ✓'],['Database','Supabase eu-west-1 ✓'],['AI Analysis','Claude Vision ✓']].map(([label, val]) => (
+              <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-/* Config */
-.config-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.config-row:last-child{border-bottom:none}
-.config-label{font-size:12px;color:var(--text3);width:130px;flex-shrink:0}
-.mono-pill{font-family:var(--mono);font-size:11px;background:var(--bg3);color:var(--text2);padding:4px 10px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+function Keywords({ toast }) {
+  const [keywords, setKeywords] = useState([]);
+  const [flows, setFlows] = useState([]);
+  const [kw, setKw] = useState(''); const [reply, setReply] = useState(''); const [flowId, setFlowId] = useState('');
+  const load = useCallback(async () => { const [k, f] = await Promise.all([sb('ig_keywords?select=*&order=created_at.desc'), sb('ig_flows?select=id,name&is_active=eq.true')]); setKeywords(k); setFlows(f); }, []);
+  useEffect(() => { load(); }, [load]);
+  const save = async () => { if (!kw || !reply) { toast('Inserisci keyword e risposta'); return; } await sb('ig_keywords', { method: 'POST', body: { keyword: kw.toLowerCase().trim(), reply_text: reply, flow_id: flowId || null, is_active: true } }); setKw(''); setReply(''); setFlowId(''); toast('Keyword aggiunta!'); load(); };
+  const toggle = async (id, val) => { await sb(`ig_keywords?id=eq.${id}`, { method: 'PATCH', body: { is_active: val } }); load(); };
+  const del = async (id) => { if (!window.confirm('Eliminare?')) return; await sb(`ig_keywords?id=eq.${id}`, { method: 'DELETE', prefer: '' }); toast('Eliminata'); load(); };
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1><i className="ti ti-tag" /> Parole chiave</h1></div>
+      <div className="two-col">
+        <div>
+          <div className="section-title">Keyword attive ({keywords.length})</div>
+          <div className="card list-card">
+            {!keywords.length && <div className="empty">Nessuna keyword ancora</div>}
+            {keywords.map(k => (
+              <div key={k.id} className="list-row">
+                <span className="kw-tag">{k.keyword}</span>
+                <div className="list-info"><span className="list-meta" style={{ marginLeft: 8 }}>{k.reply_text}</span></div>
+                <div className="list-actions"><Badge color={k.trigger_count > 0 ? 'purple' : 'gray'}>{k.trigger_count} trigger</Badge><Toggle on={k.is_active} onChange={v => toggle(k.id, v)} /><button className="icon-btn danger" onClick={() => del(k.id)}><i className="ti ti-trash" /></button></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="section-title">Aggiungi keyword</div>
+          <div className="card form-card">
+            <div className="form-group"><label>Parola chiave</label><input value={kw} onChange={e => setKw(e.target.value)} placeholder="es. link, info, prezzo" /></div>
+            <div className="form-group"><label>Risposta automatica DM</label><textarea value={reply} onChange={e => setReply(e.target.value)} placeholder="Ciao! Ecco le informazioni..." /></div>
+            <div className="form-group"><label>Flow collegato</label><select value={flowId} onChange={e => setFlowId(e.target.value)}><option value="">Nessun flow</option>{flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}</select></div>
+            <button className="btn btn-primary" onClick={save} style={{ width: '100%' }}><i className="ti ti-plus" /> Aggiungi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-/* Buttons */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
-.btn:hover{background:var(--bg4);border-color:var(--accent)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:white}
-.btn-primary:hover{background:#5a52e0;border-color:#5a52e0}
-.btn-sm{padding:4px 10px;font-size:12px}
-.icon-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;transition:all .15s}
-.icon-btn:hover{background:var(--bg3);color:var(--text);border-color:var(--border2)}
-.icon-btn.danger:hover{color:var(--red);border-color:var(--red);background:var(--red-bg)}
+function Flows({ toast }) {
+  const [flows, setFlows] = useState([]); const [modal, setModal] = useState(false); const [selected, setSelected] = useState(null);
+  const [name, setName] = useState(''); const [triggerType, setTriggerType] = useState('keyword'); const [triggerValue, setTriggerValue] = useState(''); const [firstMsg, setFirstMsg] = useState('');
+  const load = useCallback(async () => { const f = await sb('ig_flows?select=*&order=created_at.desc'); setFlows(f); }, []);
+  useEffect(() => { load(); }, [load]);
+  const create = async () => { if (!name) { toast('Inserisci il nome'); return; } const steps = firstMsg ? [{ type: 'message', message: firstMsg }] : []; await sb('ig_flows', { method: 'POST', body: { name, trigger_type: triggerType, trigger_value: triggerValue || null, steps, is_active: true } }); setModal(false); setName(''); setFirstMsg(''); setTriggerValue(''); toast('Flow creato!'); load(); };
+  const toggle = async (id, val) => { await sb(`ig_flows?id=eq.${id}`, { method: 'PATCH', body: { is_active: val } }); load(); };
+  const del = async (id) => { if (!window.confirm('Eliminare?')) return; await sb(`ig_flows?id=eq.${id}`, { method: 'DELETE', prefer: '' }); toast('Flow eliminato'); load(); };
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1><i className="ti ti-git-branch" /> Flow</h1><button className="btn btn-primary" onClick={() => setModal(true)}><i className="ti ti-plus" /> Nuovo flow</button></div>
+      <div className="card list-card">
+        {!flows.length && <div className="empty">Nessun flow ancora</div>}
+        {flows.map(f => (
+          <div key={f.id}>
+            <div className="list-row flow-row" onClick={() => setSelected(selected === f.id ? null : f.id)}>
+              <div className="flow-icon-wrap"><i className="ti ti-git-branch" /></div>
+              <div className="list-info"><span className="list-name">{f.name}</span><span className="list-meta">Trigger: {f.trigger_type}{f.trigger_value ? ` → "${f.trigger_value}"` : ''} · {(f.steps || []).length} step · avviato {f.stats?.triggered || 0}×</span></div>
+              <div className="list-actions"><Badge color={f.is_active ? 'green' : 'gray'}>{f.is_active ? 'Attivo' : 'Pausa'}</Badge><Toggle on={f.is_active} onChange={v => toggle(f.id, v)} /><button className="icon-btn danger" onClick={e => { e.stopPropagation(); del(f.id); }}><i className="ti ti-trash" /></button></div>
+            </div>
+            {selected === f.id && (
+              <div className="flow-steps-wrap">
+                {!(f.steps || []).length && <span style={{ color: 'var(--text3)', fontSize: 12 }}>Nessuno step</span>}
+                {(f.steps || []).map((s, i) => <div key={i} className="step-pill"><span className="step-num">{i + 1}</span>{s.type === 'delay' ? <><i className="ti ti-clock" /> {s.delay_seconds}s</> : <><i className="ti ti-message" /> {s.message}</>}</div>)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <Modal open={modal} onClose={() => setModal(false)} title="Crea nuovo flow">
+        <div className="modal-body">
+          <div className="form-group"><label>Nome</label><input value={name} onChange={e => setName(e.target.value)} placeholder="es. Benvenuto follower" /></div>
+          <div className="form-group"><label>Trigger</label><select value={triggerType} onChange={e => setTriggerType(e.target.value)}><option value="keyword">Parola chiave</option><option value="new_follower">Nuovo follower</option><option value="story_mention">Menzione storia</option><option value="comment">Commento</option></select></div>
+          {triggerType === 'keyword' && <div className="form-group"><label>Parola chiave</label><input value={triggerValue} onChange={e => setTriggerValue(e.target.value)} placeholder="es. link" /></div>}
+          <div className="form-group"><label>Primo messaggio</label><textarea value={firstMsg} onChange={e => setFirstMsg(e.target.value)} placeholder="Ciao! Grazie per averci scritto..." /></div>
+        </div>
+        <div className="modal-footer"><button className="btn" onClick={() => setModal(false)}>Annulla</button><button className="btn btn-primary" onClick={create}><i className="ti ti-check" /> Crea</button></div>
+      </Modal>
+    </div>
+  );
+}
 
-/* Toggle */
-.toggle{width:36px;height:20px;border-radius:10px;background:var(--bg4);border:1px solid var(--border2);position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}
-.toggle.on{background:var(--accent);border-color:var(--accent)}
-.thumb{position:absolute;width:14px;height:14px;border-radius:50%;background:white;top:2px;left:2px;transition:left .2s;pointer-events:none}
-.toggle.on .thumb{left:18px}
+function Leads({ toast }) {
+  const [leads, setLeads] = useState([]);
+  useEffect(() => { (async () => { const l = await sb('ig_leads?select=*&order=created_at.desc'); setLeads(l); })(); }, []);
+  const exportCSV = () => { if (!leads.length) { toast('Nessun lead'); return; } const csv = ['ig_username,email,source,data', ...leads.map(l => `${l.ig_username || ''},${l.email || ''},${l.source || ''},${l.created_at}`)].join('\n'); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'ig_leads.csv'; a.click(); toast('CSV scaricato!'); };
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1><i className="ti ti-users" /> Lead <span className="count-badge">{leads.length}</span></h1><button className="btn" onClick={exportCSV}><i className="ti ti-download" /> Esporta CSV</button></div>
+      <div className="card list-card">
+        <div className="lead-header"><span>Utente</span><span>Email</span><span>Fonte</span><span>Data</span></div>
+        {!leads.length && <div className="empty">Nessun lead ancora</div>}
+        {leads.map(l => <div key={l.id} className="lead-row"><div className="lead-name"><div className="avatar">{(l.ig_username || '?').slice(0, 2).toUpperCase()}</div><span>@{l.ig_username || '—'}</span></div><span className="lead-email">{l.email || '—'}</span><Badge color="purple">{l.source || '—'}</Badge><span className="lead-date">{new Date(l.created_at).toLocaleDateString('it')}</span></div>)}
+      </div>
+    </div>
+  );
+}
 
-/* Badge */
-.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px;white-space:nowrap}
-.badge-purple{background:var(--accent-bg);color:var(--accent2)}
-.badge-green{background:var(--green-bg);color:var(--green)}
-.badge-amber{background:var(--amber-bg);color:var(--amber)}
-.badge-gray{background:var(--bg3);color:var(--text3)}
+function Config({ toast }) {
+  const copy = t => { navigator.clipboard.writeText(t); toast('Copiato!'); };
+  return (
+    <div className="panel">
+      <div className="panel-header"><h1><i className="ti ti-settings" /> Configurazione</h1></div>
+      <div className="section-title">Credenziali attive</div>
+      <div className="card">
+        {[['Account Instagram','@neuroplasticity_training ✓'],['Page ID','959429044971851'],['App ID Meta','1314288600705533'],['Database','Supabase eu-west-1 ✓'],['AI Vision','Claude Opus ✓']].map(([label, val]) => <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>)}
+      </div>
+      <div className="section-title" style={{ marginTop: 20 }}>Webhook Meta</div>
+      <div className="card">
+        {[['Callback URL','https://yywcqmowpsejlunzoyli.supabase.co/functions/v1/ig-webhook'],['Verify Token','54861684-1a77-4a13-8718-f33af5a9ae66']].map(([label, val]) => (
+          <div key={label} className="config-row"><span className="config-label">{label}</span><code className="mono-pill" style={{ flex: 1, cursor: 'pointer' }} onClick={() => copy(val)}>{val}</code><button className="icon-btn" onClick={() => copy(val)}><i className="ti ti-copy" /></button></div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-/* Form */
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:11px;font-weight:600;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+function CommentRules({ toast }) {
+  const [rules, setRules] = useState([]);
+  const [posts, setPosts] = useState([]);
+  const [keyword, setKeyword] = useState('');
+  const [replyDm, setReplyDm] = useState('');
+  const [replyComment, setReplyComment] = useState('');
+  const [postId, setPostId] = useState('');
 
-/* Modal */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(6px)}
-.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);width:420px;max-width:92vw;box-shadow:0 24px 60px rgba(0,0,0,.6)}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
-.modal-title{font-size:15px;font-weight:600}
-.modal-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;display:flex;padding:0}
-.modal-close:hover{color:var(--text)}
-.modal-body{padding:20px}
-.modal-footer{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border)}
+  const load = useCallback(async () => {
+    const r = await sb('ig_comment_rules?select=*&order=created_at.desc');
+    setRules(r);
+    try {
+      const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption&limit=10&access_token=${IG_TOKEN}`);
+      const data = await res.json();
+      setPosts(data.data || []);
+    } catch(e) {}
+  }, []);
 
-/* Empty */
-.empty{padding:36px;text-align:center;color:var(--text3);font-size:13px}
+  useEffect(() => { load(); }, [load]);
 
-/* Toast */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--accent);color:white;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:600;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;z-index:999;box-shadow:0 8px 24px rgba(108,99,255,.4)}
-.toast.show{opacity:1;transform:translateY(0)}
+  const save = async () => {
+    if (!replyDm) { toast('Inserisci il messaggio DM'); return; }
+    await sb('ig_comment_rules', { method: 'POST', body: { keyword: keyword.toLowerCase().trim() || null, reply_dm: replyDm, reply_comment: replyComment || null, post_id: postId || null, is_active: true } });
+    setKeyword(''); setReplyDm(''); setReplyComment(''); setPostId('');
+    toast('Regola aggiunta!'); load();
+  };
 
-.info-box{display:flex;align-items:flex-start;gap:10px;background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:20px;font-size:13px;color:var(--text2);line-height:1.5}
-.info-box i{color:var(--accent);font-size:16px;flex-shrink:0;margin-top:1px}
+  const toggle = async (id, val) => { await sb(`ig_comment_rules?id=eq.${id}`, { method: 'PATCH', body: { is_active: val } }); load(); };
+  const del = async (id) => { if (!window.confirm('Eliminare?')) return; await sb(`ig_comment_rules?id=eq.${id}`, { method: 'DELETE', prefer: '' }); toast('Eliminata'); load(); };
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h1><i className="ti ti-message-forward" /> Auto-DM da commenti</h1>
+        <span className="badge badge-green"><i className="ti ti-bolt" /> Attivo</span>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Quando qualcuno commenta un tuo post con una parola chiave, riceve automaticamente un DM privato.</span>
+      </div>
+      <div className="two-col">
+        <div>
+          <div className="section-title">Regole attive ({rules.length})</div>
+          <div className="card list-card">
+            {!rules.length && <div className="empty">Nessuna regola ancora</div>}
+            {rules.map(r => (
+              <div key={r.id} className="list-row">
+                <div className="flow-icon-wrap" style={{ background: '#f472b622', color: '#f472b6' }}><i className="ti ti-message-forward" /></div>
+                <div className="list-info">
+                  <span className="list-name">{r.keyword ? `Keyword: "${r.keyword}"` : 'Qualsiasi commento'}</span>
+                  <span className="list-meta">DM: {r.reply_dm} {r.post_id ? '· Post specifico' : '· Tutti i post'}</span>
+                  <span className="list-meta" style={{color:'var(--accent2)'}}>{r.trigger_count} trigger</span>
+                </div>
+                <div className="list-actions">
+                  <Toggle on={r.is_active} onChange={v => toggle(r.id, v)} />
+                  <button className="icon-btn danger" onClick={() => del(r.id)}><i className="ti ti-trash" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="section-title">Nuova regola</div>
+          <div className="card form-card">
+            <div className="form-group">
+              <label>Parola chiave nel commento (opzionale)</label>
+              <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="es. link, info — vuoto = tutti i commenti" />
+            </div>
+            <div className="form-group">
+              <label>Post specifico (opzionale)</label>
+              <select value={postId} onChange={e => setPostId(e.target.value)}>
+                <option value="">Tutti i post</option>
+                {posts.map(p => <option key={p.id} value={p.id}>{(p.caption || 'Post senza caption').slice(0, 40)}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Messaggio DM automatico</label>
+              <textarea value={replyDm} onChange={e => setReplyDm(e.target.value)} placeholder="Ciao! Grazie per il commento, ecco il link che cercavi..." />
+            </div>
+            <div className="form-group">
+              <label>Risposta pubblica al commento (opzionale)</label>
+              <input value={replyComment} onChange={e => setReplyComment(e.target.value)} placeholder="es. Ti ho mandato un DM!" />
+            </div>
+            <button className="btn btn-primary" onClick={save} style={{ width: '100%' }}><i className="ti ti-plus" /> Aggiungi regola</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [panel, setPanel] = useState('dashboard');
+  const [toastMsg, setToastMsg] = useState('');
+  const [stats, setStats] = useState({});
+  const [posts, setPosts] = useState([]);
+  const toast = useCallback(msg => setToastMsg(msg), []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [flows, leads, kws, msgs] = await Promise.all([sb('ig_flows?select=id&is_active=eq.true'), sb('ig_leads?select=id'), sb('ig_keywords?select=id&is_active=eq.true'), sb('ig_messages?select=id&direction=eq.outbound')]);
+        setStats({ flows: flows.length, leads: leads.length, keywords: kws.length, messages: msgs.length });
+      } catch (e) { console.error(e); }
+      try {
+        const res = await fetch(`https://graph.instagram.com/v19.0/${IG_USER_ID}/media?fields=id,caption,media_type,media_url,thumbnail_url,timestamp,like_count,comments_count,permalink&limit=6&access_token=${IG_TOKEN}`);
+        const data = await res.json();
+        setPosts(data.data || []);
+      } catch (e) { console.error(e); }
+    })();
+  }, []);
+
+  const nav = [
+    { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+    { id: 'posts', icon: 'photo', label: 'Post' },
+    { id: 'flows', icon: 'git-branch', label: 'Flow' },
+    { id: 'keywords', icon: 'tag', label: 'Parole chiave' },
+    { id: 'leads', icon: 'users', label: 'Lead' },
+    { id: 'comments', icon: 'message-forward', label: 'Auto-DM commenti' },
+    { id: 'config', icon: 'settings', label: 'Configurazione' },
+  ];
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <div className="logo-icon"><i className="ti ti-brand-instagram" /></div>
+          <div><div className="logo-name">MyChat</div><div className="logo-sub">Instagram DM</div></div>
+        </div>
+        <nav className="sidebar-nav">
+          {nav.map(n => <button key={n.id} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => setPanel(n.id)}><i className={`ti ti-${n.icon}`} /><span>{n.label}</span></button>)}
+        </nav>
+        <div className="sidebar-footer"><div className="status-dot" /><span>@neuroplasticity_training</span></div>
+      </aside>
+      <main className="main">
+        {panel === 'dashboard' && <Dashboard stats={stats} posts={posts} />}
+        {panel === 'posts' && <Posts toast={toast} />}
+        {panel === 'flows' && <Flows toast={toast} />}
+        {panel === 'keywords' && <Keywords toast={toast} />}
+        {panel === 'leads' && <Leads toast={toast} />}
+        {panel === 'comments' && <CommentRules toast={toast} />}
+        {panel === 'config' && <Config toast={toast} />}
+      </main>
+      <Toast msg={toastMsg} onHide={() => setToastMsg('')} />
+    </div>
+  );
+}
