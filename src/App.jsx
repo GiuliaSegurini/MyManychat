@@ -4,6 +4,8 @@ import './App.css';
 
 const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGNJRkRsck9zSS0wemFtTFl5bHdDWWt2ZAmRudkI2ZA2s1WC1XWGZASMHBSMjJvUmYxX2NsU2RWUDV2QXZA0VTVDX0JzOWY0a2xsZA0h6ZA3RTa3VTUVRoOTZAISQZDZD';
 const IG_USER_ID = '26770455472615914';
+const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
 
 function Toast({ msg, onHide }) {
   useEffect(() => { if (msg) { const t = setTimeout(onHide, 2400); return () => clearTimeout(t); } }, [msg, onHide]);
@@ -31,6 +33,8 @@ function Posts({ toast }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [analyzing, setAnalyzing] = useState({});
+  const [analyses, setAnalyses] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -43,6 +47,37 @@ function Posts({ toast }) {
       setLoading(false);
     })();
   }, [toast]);
+
+  const analyzeVideo = async (post) => {
+    if (analyzing[post.id]) return;
+    setAnalyzing(a => ({ ...a, [post.id]: true }));
+    toast('Analisi AI in corso...');
+
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ post_id: post.id, thumbnail_url: post.thumbnail_url }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setAnalyses(a => ({ ...a, [post.id]: data.analysis }));
+        toast('✅ Analisi completata!');
+      } else {
+        toast('Errore: ' + (data.error || 'sconosciuto'));
+      }
+    } catch (e) {
+      console.error(e);
+      toast('Errore: ' + e.message);
+    }
+
+    setAnalyzing(a => ({ ...a, [post.id]: false }));
+  };
 
   return (
     <div className="panel">
@@ -60,7 +95,68 @@ function Posts({ toast }) {
             {selected === p.id && (
               <div className="post-detail">
                 <p className="post-caption">{p.caption || 'Nessuna caption'}</p>
-                <div className="post-meta-row"><span className="post-date">{new Date(p.timestamp).toLocaleDateString('it')}</span><a href={p.permalink} target="_blank" rel="noreferrer" className="btn btn-sm"><i className="ti ti-external-link" /> Apri</a></div>
+                <div className="post-meta-row">
+                  <span className="post-date">{new Date(p.timestamp).toLocaleDateString('it')}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <a href={p.permalink} target="_blank" rel="noreferrer" className="btn btn-sm"><i className="ti ti-external-link" /> Apri</a>
+                    {p.media_type === 'VIDEO' && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={e => { e.stopPropagation(); analyzeVideo(p); }}
+                        disabled={analyzing[p.id]}
+                        style={{ opacity: analyzing[p.id] ? 0.6 : 1 }}
+                      >
+                        {analyzing[p.id]
+                          ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Analisi...</>
+                          : <><i className="ti ti-scan" /> Analizza</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {analyses[p.id] && (
+                  <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {analyses[p.id].summary && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>📝 </span>
+                        {analyses[p.id].summary}
+                      </div>
+                    )}
+                    {analyses[p.id].scenes?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>SCENE</span>
+                        {analyses[p.id].scenes.map((s, i) => <span key={i} className="badge badge-purple">{s}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].objects?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>OGGETTI</span>
+                        {[...new Set(analyses[p.id].objects.flatMap(o => o.tags))].map((tag, i) => (
+                          <span key={i} className="badge badge-gray">{tag}</span>
+                        ))}
+                      </div>
+                    )}
+                    {analyses[p.id].colors?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>COLORI</span>
+                        {analyses[p.id].colors.map((c, i) => <span key={i} className="badge badge-amber">{c}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].text_detected?.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>TESTO NEL VIDEO</span>
+                        {analyses[p.id].text_detected.map((t, i) => <span key={i} className="badge badge-green">{t}</span>)}
+                      </div>
+                    )}
+                    {analyses[p.id].mood && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text3)' }}>MOOD</span>
+                        <span className="badge badge-pink">{analyses[p.id].mood}</span>
+                        {analyses[p.id].content_type && <span className="badge badge-purple">{analyses[p.id].content_type}</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -102,7 +198,7 @@ function Dashboard({ stats, posts }) {
         <div>
           <div className="section-title">Stato sistema</div>
           <div className="card">
-            {[['Account','@neuroplasticity_training ✓'],['Webhook','ig-webhook ✓'],['Database','Supabase eu-west-1 ✓']].map(([label, val]) => (
+            {[['Account','@neuroplasticity_training ✓'],['Webhook','ig-webhook ✓'],['Database','Supabase eu-west-1 ✓'],['AI Analysis','Claude Vision ✓']].map(([label, val]) => (
               <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>
             ))}
           </div>
@@ -217,7 +313,7 @@ function Config({ toast }) {
       <div className="panel-header"><h1><i className="ti ti-settings" /> Configurazione</h1></div>
       <div className="section-title">Credenziali attive</div>
       <div className="card">
-        {[['Account Instagram','@neuroplasticity_training ✓'],['Page ID','959429044971851'],['App ID Meta','1314288600705533'],['Database','Supabase eu-west-1 ✓']].map(([label, val]) => <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>)}
+        {[['Account Instagram','@neuroplasticity_training ✓'],['Page ID','959429044971851'],['App ID Meta','1314288600705533'],['Database','Supabase eu-west-1 ✓'],['AI Vision','Claude Opus ✓']].map(([label, val]) => <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>)}
       </div>
       <div className="section-title" style={{ marginTop: 20 }}>Webhook Meta</div>
       <div className="card">
@@ -229,8 +325,6 @@ function Config({ toast }) {
   );
 }
 
-
-// ── Comment Rules Panel ──────────────────────────────────────────────────────
 function CommentRules({ toast }) {
   const [rules, setRules] = useState([]);
   const [posts, setPosts] = useState([]);
