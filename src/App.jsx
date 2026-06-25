@@ -6,6 +6,24 @@ const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGN
 const IG_USER_ID = '26770455472615914';
 const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
+const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73'; // riga "profiles" nel progetto analytics, usata da generate-viral-drafts e publish-draft
+
+const sbNew = async (path, opts = {}) => {
+  const res = await fetch(`${SUPABASE_URL_NEW}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: opts.prefer !== undefined ? opts.prefer : 'return=representation',
+      ...opts.headers,
+    },
+    method: opts.method || 'GET',
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const t = await res.text();
+  return t ? JSON.parse(t) : [];
+};
 
 function Toast({ msg, onHide }) {
   useEffect(() => { if (msg) { const t = setTimeout(onHide, 2400); return () => clearTimeout(t); } }, [msg, onHide]);
@@ -416,6 +434,143 @@ function CommentRules({ toast }) {
   );
 }
 
+function BozzeVirali({ toast }) {
+  const [drafts, setDrafts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [publishing, setPublishing] = useState({});
+  const [edits, setEdits] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await sbNew(`editorial_posts?user_id=eq.${ANALYTICS_USER_ID}&generated_image_url=not.is.null&order=created_at.desc`);
+      setDrafts(d);
+    } catch (e) { toast('Errore caricamento bozze'); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const generate = async () => {
+    setGenerating(true);
+    toast('Generazione bozze in corso, può richiedere un minuto...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/generate-viral-drafts`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else toast(`✅ ${data.drafts_created || 0} nuove bozze generate!`);
+    } catch (e) { toast('Errore: ' + e.message); }
+    setGenerating(false);
+    load();
+  };
+
+  const publish = async (id) => {
+    setPublishing(p => ({ ...p, [id]: true }));
+    const edit = edits[id];
+    try {
+      if (edit) await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', body: edit, prefer: 'return=minimal' });
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/publish-draft`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: id }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore pubblicazione: ' + data.error);
+      else toast('✅ Pubblicato su Instagram!');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setPublishing(p => ({ ...p, [id]: false }));
+    load();
+  };
+
+  const discard = async (id) => {
+    if (!window.confirm('Scartare questa bozza?')) return;
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, { method: 'DELETE', prefer: '' });
+      toast('Bozza scartata');
+      setDrafts(d => d.filter(x => x.id !== id));
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const setEdit = (id, field, value) => setEdits(e => ({ ...e, [id]: { ...e[id], [field]: value } }));
+  const val = (d, field) => (edits[d.id]?.[field] !== undefined ? edits[d.id][field] : d[field]);
+
+  const statusBadge = (status) => {
+    const map = { draft_ready: ['Pronta', 'purple'], publishing: ['Pubblicazione...', 'amber'], published: ['Pubblicata', 'green'], failed: ['Errore', 'pink'] };
+    const [label, color] = map[status] || [status, 'gray'];
+    return <Badge color={color}>{label}</Badge>;
+  };
+
+  return (
+    <div className="panel">
+      <style>{`
+        .draft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+        .draft-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+        .draft-img-wrap{position:relative;padding-bottom:125%;overflow:hidden;background:var(--bg3)}
+        .draft-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+        .draft-body{padding:14px;display:flex;flex-direction:column;gap:8px}
+        .draft-topic{font-size:14px;font-weight:600;color:var(--text)}
+        .draft-why{font-size:11px;color:var(--text3);font-style:italic}
+        .draft-error{font-size:11px;color:var(--red)}
+        .draft-score{font-size:11px;color:var(--text3)}
+        .draft-row{display:flex;align-items:center;justify-content:space-between}
+        .draft-actions{display:flex;gap:6px;margin-top:4px}
+      `}</style>
+      <div className="panel-header">
+        <h1><i className="ti ti-sparkles" /> Bozze virali</h1>
+        <button className="btn btn-primary" onClick={generate} disabled={generating}>
+          {generating
+            ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generazione...</>
+            : <><i className="ti ti-wand" /> Genera nuove bozze ora</>}
+        </button>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Ogni lunedì vengono generate automaticamente nuove bozze (caption + immagine) basate sui post che hanno raggiunto più pubblico nuovo. Rivedile e pubblicale con un click, oppure scartale.</span>
+      </div>
+      {loading && <div className="empty">Caricamento...</div>}
+      {!loading && !drafts.length && <div className="empty">Nessuna bozza ancora. Premi "Genera nuove bozze ora" per crearne subito.</div>}
+      <div className="draft-grid">
+        {drafts.map(d => (
+          <div key={d.id} className="draft-card">
+            <div className="draft-img-wrap"><img src={d.generated_image_url} alt={d.topic} className="draft-img" /></div>
+            <div className="draft-body">
+              <div className="draft-row">
+                {statusBadge(d.status)}
+                {d.audience_growth_score != null && <span className="draft-score">score {Number(d.audience_growth_score).toFixed(2)}</span>}
+              </div>
+              <span className="draft-topic">{d.topic}</span>
+              <div className="form-group">
+                <label>Caption</label>
+                <textarea value={val(d, 'caption_suggestion') || ''} onChange={e => setEdit(d.id, 'caption_suggestion', e.target.value)} disabled={d.status === 'published'} rows={4} />
+              </div>
+              <div className="form-group">
+                <label>Call to action</label>
+                <input value={val(d, 'cta_suggestion') || ''} onChange={e => setEdit(d.id, 'cta_suggestion', e.target.value)} disabled={d.status === 'published'} />
+              </div>
+              {d.why_suggested && <p className="draft-why">{d.why_suggested}</p>}
+              {d.status === 'failed' && d.publish_error && <p className="draft-error">{d.publish_error}</p>}
+              {d.status !== 'published' && (
+                <div className="draft-actions">
+                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => publish(d.id)} disabled={publishing[d.id] || d.status === 'publishing'}>
+                    {publishing[d.id] || d.status === 'publishing' ? 'Pubblicazione...' : 'Pubblica ora'}
+                  </button>
+                  <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
+                </div>
+              )}
+              {d.status === 'published' && d.published_media_id && <span className="draft-score">media ID: {d.published_media_id}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
@@ -440,6 +595,7 @@ export default function App() {
   const nav = [
     { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
     { id: 'posts', icon: 'photo', label: 'Post' },
+    { id: 'bozze', icon: 'sparkles', label: 'Bozze virali' },
     { id: 'flows', icon: 'git-branch', label: 'Flow' },
     { id: 'keywords', icon: 'tag', label: 'Parole chiave' },
     { id: 'leads', icon: 'users', label: 'Lead' },
@@ -462,6 +618,7 @@ export default function App() {
       <main className="main">
         {panel === 'dashboard' && <Dashboard stats={stats} posts={posts} />}
         {panel === 'posts' && <Posts toast={toast} />}
+        {panel === 'bozze' && <BozzeVirali toast={toast} />}
         {panel === 'flows' && <Flows toast={toast} />}
         {panel === 'keywords' && <Keywords toast={toast} />}
         {panel === 'leads' && <Leads toast={toast} />}
