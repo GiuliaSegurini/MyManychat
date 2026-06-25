@@ -463,6 +463,7 @@ function BozzeVirali({ toast }) {
         body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
       });
       const data = await res.json();
+      if (data.debug_insights_sample) window.alert(JSON.stringify(data.debug_insights_sample, null, 2));
       if (data.error) toast('Errore sync: ' + data.error);
       else toast(`✅ Analizzati ${data.videos_analyzed ?? 0} post. Ora puoi generare le bozze.`);
     } catch (e) { toast('Errore sync: ' + e.message); }
