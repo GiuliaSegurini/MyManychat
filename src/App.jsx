@@ -438,6 +438,7 @@ function BozzeVirali({ toast }) {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState({});
   const [edits, setEdits] = useState({});
 
@@ -451,6 +452,22 @@ function BozzeVirali({ toast }) {
   }, [toast]);
 
   useEffect(() => { load(); }, [load]);
+
+  const syncAnalytics = async () => {
+    setSyncing(true);
+    toast('Sincronizzazione dati Instagram in corso (fino a 1 minuto)...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/content-intelligence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore sync: ' + data.error);
+      else toast(`✅ Analizzati ${data.videos_analyzed ?? 0} post. Ora puoi generare le bozze.`);
+    } catch (e) { toast('Errore sync: ' + e.message); }
+    setSyncing(false);
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -522,15 +539,22 @@ function BozzeVirali({ toast }) {
       `}</style>
       <div className="panel-header">
         <h1><i className="ti ti-sparkles" /> Bozze virali</h1>
-        <button className="btn btn-primary" onClick={generate} disabled={generating}>
-          {generating
-            ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generazione...</>
-            : <><i className="ti ti-wand" /> Genera nuove bozze ora</>}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={syncAnalytics} disabled={syncing}>
+            {syncing
+              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizzazione...</>
+              : <><i className="ti ti-refresh" /> Aggiorna analytics da Instagram</>}
+          </button>
+          <button className="btn btn-primary" onClick={generate} disabled={generating}>
+            {generating
+              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generazione...</>
+              : <><i className="ti ti-wand" /> Genera nuove bozze ora</>}
+          </button>
+        </div>
       </div>
       <div className="info-box">
         <i className="ti ti-info-circle" />
-        <span>Ogni lunedì vengono generate automaticamente nuove bozze (caption + immagine) basate sui post che hanno raggiunto più pubblico nuovo. Rivedile e pubblicale con un click, oppure scartale.</span>
+        <span>Prima volta? Premi "Aggiorna analytics da Instagram" (scarica i dati reali di reach/saves dai tuoi post), poi "Genera nuove bozze ora". Da qui in poi succede tutto in automatico ogni lunedì.</span>
       </div>
       {loading && <div className="empty">Caricamento...</div>}
       {!loading && !drafts.length && <div className="empty">Nessuna bozza ancora. Premi "Genera nuove bozze ora" per crearne subito.</div>}
