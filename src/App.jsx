@@ -470,6 +470,8 @@ function BozzeVirali({ toast }) {
     setSyncing(false);
   };
 
+  const [lastError, setLastError] = useState(null);
+
   const generate = async () => {
     setGenerating(true);
     toast('Generazione bozze in corso, può richiedere un minuto...');
@@ -480,9 +482,10 @@ function BozzeVirali({ toast }) {
         body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
       });
       const data = await res.json();
+      setLastError(JSON.stringify(data, null, 2));
       if (data.error) toast('Errore: ' + data.error);
       else toast(`✅ ${data.drafts_created || 0} nuove bozze generate!`);
-    } catch (e) { toast('Errore: ' + e.message); }
+    } catch (e) { setLastError('Errore di rete: ' + e.message); toast('Errore: ' + e.message); }
     setGenerating(false);
     load();
   };
@@ -557,6 +560,12 @@ function BozzeVirali({ toast }) {
         <i className="ti ti-info-circle" />
         <span>Prima volta? Premi "Aggiorna analytics da Instagram" (scarica i dati reali di reach/saves dai tuoi post), poi "Genera nuove bozze ora". Da qui in poi succede tutto in automatico ogni lunedì.</span>
       </div>
+      {lastError && (
+        <div className="info-box" style={{ background: 'rgba(248,113,113,0.12)', borderColor: 'var(--red)', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
+          <i className="ti ti-alert-triangle" style={{ color: 'var(--red)' }} />
+          <span>{lastError}</span>
+        </div>
+      )}
       {loading && <div className="empty">Caricamento...</div>}
       {!loading && !drafts.length && <div className="empty">Nessuna bozza ancora. Premi "Genera nuove bozze ora" per crearne subito.</div>}
       <div className="draft-grid">
