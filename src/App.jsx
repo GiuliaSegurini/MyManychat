@@ -644,6 +644,12 @@ function BozzeVirali({ toast }) {
                 </div>
               )}
               {d.status === 'published' && d.published_media_id && <span className="draft-score">media ID: {d.published_media_id}</span>}
+              {(d.resource_pdf_url || d.stripe_payment_link) && (
+                <div className="draft-row" style={{ marginTop: 6, gap: 10 }}>
+                  {d.resource_pdf_url && <a href={d.resource_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>📄 Vedi PDF guida</a>}
+                  {d.stripe_payment_link && <a href={d.stripe_payment_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>💳 Link pagamento</a>}
+                </div>
+              )}
             </div>
           </div>
         ))}
