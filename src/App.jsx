@@ -471,6 +471,33 @@ function BozzeVirali({ toast }) {
   };
 
   const [lastError, setLastError] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState({});
+
+  const schedule = async (id) => {
+    const when = scheduleAt[id];
+    if (!when) { toast('Scegli prima data e ora'); return; }
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { status: 'scheduled', scheduled_for: new Date(when).toISOString() },
+      });
+      toast('📅 Programmata!');
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const unschedule = async (id) => {
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { status: 'draft_ready', scheduled_for: null },
+      });
+      toast('Programmazione annullata');
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
 
   const generate = async () => {
     setGenerating(true);
@@ -521,7 +548,7 @@ function BozzeVirali({ toast }) {
   const val = (d, field) => (edits[d.id]?.[field] !== undefined ? edits[d.id][field] : d[field]);
 
   const statusBadge = (status) => {
-    const map = { draft_ready: ['Pronta', 'purple'], publishing: ['Pubblicazione...', 'amber'], published: ['Pubblicata', 'green'], failed: ['Errore', 'pink'] };
+    const map = { draft_ready: ['Pronta', 'purple'], scheduled: ['Programmata', 'amber'], publishing: ['Pubblicazione...', 'amber'], published: ['Pubblicata', 'green'], failed: ['Errore', 'pink'] };
     const [label, color] = map[status] || [status, 'gray'];
     return <Badge color={color}>{label}</Badge>;
   };
@@ -588,11 +615,31 @@ function BozzeVirali({ toast }) {
               </div>
               {d.why_suggested && <p className="draft-why">{d.why_suggested}</p>}
               {d.status === 'failed' && d.publish_error && <p className="draft-error">{d.publish_error}</p>}
-              {d.status !== 'published' && (
+              {d.status === 'scheduled' && d.scheduled_for && (
+                <p className="draft-score">Programmata per: {new Date(d.scheduled_for).toLocaleString('it-IT')}</p>
+              )}
+              {(d.status === 'draft_ready' || d.status === 'failed') && (
+                <div className="form-group">
+                  <label>Programma per</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt[d.id] || ''}
+                    onChange={e => setScheduleAt(s => ({ ...s, [d.id]: e.target.value }))}
+                  />
+                </div>
+              )}
+              {d.status !== 'published' && d.status !== 'scheduled' && (
                 <div className="draft-actions">
                   <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => publish(d.id)} disabled={publishing[d.id] || d.status === 'publishing'}>
                     {publishing[d.id] || d.status === 'publishing' ? 'Pubblicazione...' : 'Pubblica ora'}
                   </button>
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => schedule(d.id)}>Programma</button>
+                  <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
+                </div>
+              )}
+              {d.status === 'scheduled' && (
+                <div className="draft-actions">
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => unschedule(d.id)}>Annulla programmazione</button>
                   <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
                 </div>
               )}
