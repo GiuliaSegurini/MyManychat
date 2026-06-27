@@ -473,6 +473,17 @@ function BozzeVirali({ toast }) {
   const [lastError, setLastError] = useState(null);
   const [scheduleAt, setScheduleAt] = useState({});
 
+  const saveEdits = async (id) => {
+    const edit = edits[id];
+    if (!edit) return;
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal', body: edit });
+      toast('✅ Modifiche salvate');
+      setEdits(e => { const n = { ...e }; delete n[id]; return n; });
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
   const schedule = async (id) => {
     const when = scheduleAt[id];
     if (!when) { toast('Scegli prima data e ora'); return; }
@@ -639,6 +650,7 @@ function BozzeVirali({ toast }) {
               )}
               {d.status === 'scheduled' && (
                 <div className="draft-actions">
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => saveEdits(d.id)} disabled={!edits[d.id]}>Salva modifiche</button>
                   <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => unschedule(d.id)}>Annulla programmazione</button>
                   <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
                 </div>
