@@ -69,16 +69,16 @@ function Posts({ toast }) {
   const analyzeVideo = async (post) => {
     if (analyzing[post.id]) return;
     setAnalyzing(a => ({ ...a, [post.id]: true }));
-    toast('Analisi AI in corso...');
+    toast('Analisi video completo con Gemini in corso (fino a 40s)...');
 
     try {
-      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video-gemini`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ post_id: post.id, thumbnail_url: post.thumbnail_url }),
+        body: JSON.stringify({ post_id: post.id, user_id: ANALYTICS_USER_ID }),
       });
 
       const data = await res.json();
@@ -149,7 +149,7 @@ function Posts({ toast }) {
                     {analyses[p.id].objects?.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>OGGETTI</span>
-                        {[...new Set(analyses[p.id].objects.flatMap(o => o.tags))].map((tag, i) => (
+                        {analyses[p.id].objects.map((tag, i) => (
                           <span key={i} className="badge badge-gray">{tag}</span>
                         ))}
                       </div>
@@ -171,6 +171,18 @@ function Posts({ toast }) {
                         <span style={{ fontSize: 11, color: 'var(--text3)' }}>MOOD</span>
                         <span className="badge badge-pink">{analyses[p.id].mood}</span>
                         {analyses[p.id].content_type && <span className="badge badge-purple">{analyses[p.id].content_type}</span>}
+                      </div>
+                    )}
+                    {analyses[p.id].hook_effectiveness && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>🎯 Hook: </span>
+                        {analyses[p.id].hook_effectiveness}
+                      </div>
+                    )}
+                    {analyses[p.id].pacing_notes && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>⏱️ Ritmo: </span>
+                        {analyses[p.id].pacing_notes}
                       </div>
                     )}
                   </div>
