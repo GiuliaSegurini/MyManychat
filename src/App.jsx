@@ -706,6 +706,99 @@ function BozzeVirali({ toast }) {
   );
 }
 
+function Performance({ toast }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/effectiveness-report`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else setReport(data);
+    } catch (e) { toast('Errore: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  const diffPct = (sys, base) => {
+    if (!base) return null;
+    const pct = ((sys - base) / base) * 100;
+    return pct;
+  };
+
+  const StatDiff = ({ label, sys, base, suffix = '' }) => {
+    const pct = diffPct(sys, base);
+    const positive = pct != null && pct >= 0;
+    return (
+      <div className="form-group" style={{ marginBottom: 4 }}>
+        <label>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: 20, fontWeight: 700 }}>{sys}{suffix}</span>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>vs storico {base}{suffix}</span>
+          {pct != null && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: positive ? '#22c55e' : '#f87171' }}>
+              {positive ? '▲' : '▼'} {Math.abs(pct).toFixed(0)}%
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h1><i className="ti ti-chart-line" /> Performance del sistema</h1>
+        <button className="btn" onClick={loadReport} disabled={loading}>
+          {loading ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Aggiorno...</> : <><i className="ti ti-refresh" /> Aggiorna report</>}
+        </button>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Confronta i post generati automaticamente dal sistema con lo storico precedente, e mostra il funnel reale (commenti → DM → pagamenti Stripe).</span>
+      </div>
+
+      {!report && !loading && <div className="empty">Nessun dato ancora.</div>}
+
+      {report && (
+        <>
+          <div className="draft-grid" style={{ marginBottom: 24 }}>
+            <div className="draft-card" style={{ padding: 16 }}>
+              <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Contenuto — sistema vs storico</span>
+              <StatDiff label="Reach medio" sys={report.contenuto.sistema.avg_reach} base={report.contenuto.storico_precedente.avg_reach} />
+              <StatDiff label="Saves medi" sys={report.contenuto.sistema.avg_saves} base={report.contenuto.storico_precedente.avg_saves} />
+              <StatDiff label="Engagement rate" sys={(report.contenuto.sistema.avg_engagement_rate * 100).toFixed(2)} base={(report.contenuto.storico_precedente.avg_engagement_rate * 100).toFixed(2)} suffix="%" />
+              <p className="draft-score" style={{ marginTop: 10 }}>
+                Basato su {report.contenuto.sistema.post_pubblicati} post del sistema vs {report.contenuto.storico_precedente.post_totali} storici.
+                {report.contenuto.sistema.post_pubblicati < 10 && ' Campione ancora piccolo: i numeri si stabilizzano con più post pubblicati.'}
+              </p>
+            </div>
+            <div className="draft-card" style={{ padding: 16 }}>
+              <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Funnel di monetizzazione</span>
+              <div className="form-group"><label>Guide create</label><span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.guide_create}</span></div>
+              <div className="form-group"><label>DM inviati da keyword</label><span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.dm_inviati_da_keyword}</span></div>
+              <div className="form-group">
+                <label>Pagamenti completati</label>
+                {report.funnel.stripe_errore
+                  ? <p className="draft-error">{report.funnel.stripe_errore}</p>
+                  : <span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.pagamenti_completati} — €{report.funnel.fatturato_euro.toFixed(2)}</span>}
+              </div>
+            </div>
+          </div>
+          <p className="draft-score">Generato: {new Date(report.generated_at).toLocaleString('it-IT')}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
@@ -731,6 +824,7 @@ export default function App() {
     { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
     { id: 'posts', icon: 'photo', label: 'Post' },
     { id: 'bozze', icon: 'sparkles', label: 'Bozze virali' },
+    { id: 'performance', icon: 'chart-line', label: 'Performance' },
     { id: 'flows', icon: 'git-branch', label: 'Flow' },
     { id: 'keywords', icon: 'tag', label: 'Parole chiave' },
     { id: 'leads', icon: 'users', label: 'Lead' },
@@ -754,6 +848,7 @@ export default function App() {
         {panel === 'dashboard' && <Dashboard stats={stats} posts={posts} />}
         {panel === 'posts' && <Posts toast={toast} />}
         {panel === 'bozze' && <BozzeVirali toast={toast} />}
+        {panel === 'performance' && <Performance toast={toast} />}
         {panel === 'flows' && <Flows toast={toast} />}
         {panel === 'keywords' && <Keywords toast={toast} />}
         {panel === 'leads' && <Leads toast={toast} />}
