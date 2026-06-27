@@ -499,6 +499,36 @@ function BozzeVirali({ toast }) {
   const [lastError, setLastError] = useState(null);
   const [scheduleAt, setScheduleAt] = useState({});
 
+  const [refImage, setRefImage] = useState(null);
+  const [refTopic, setRefTopic] = useState('');
+  const [refGenerating, setRefGenerating] = useState(false);
+
+  const generateFromReference = async () => {
+    if (!refImage || !refTopic.trim()) { toast('Carica un\'immagine e scrivi un topic'); return; }
+    setRefGenerating(true);
+    try {
+      const fileName = `${ANALYTICS_USER_ID}/ref-${Date.now()}-${refImage.name}`;
+      const uploadRes = await fetch(`${SUPABASE_URL_NEW}/storage/v1/object/reference-images/${fileName}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': refImage.type },
+        body: refImage,
+      });
+      if (!uploadRes.ok) throw new Error('Upload immagine fallito: ' + await uploadRes.text());
+      const referenceImageUrl = `${SUPABASE_URL_NEW}/storage/v1/object/public/reference-images/${fileName}`;
+
+      toast('Generazione in corso, può richiedere fino a 30-40 secondi...');
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/generate-draft-from-reference`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID, reference_image_url: referenceImageUrl, topic: refTopic.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else { toast('✅ Bozza creata dal riferimento!'); setRefImage(null); setRefTopic(''); load(); }
+    } catch (e) { toast('Errore: ' + e.message); }
+    setRefGenerating(false);
+  };
+
   const saveEdits = async (id) => {
     const edit = edits[id];
     if (!edit) return;
@@ -634,6 +664,28 @@ function BozzeVirali({ toast }) {
           </span>
         </div>
       )}
+      <div className="info-box" style={{ background: 'rgba(168,85,247,0.1)', borderColor: '#a855f7', display: 'block' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <i className="ti ti-photo-up" style={{ color: '#a855f7' }} />
+          <strong>Crea da immagine di riferimento</strong>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+          Carica un'immagine che è andata virale (tua o di altri) e scrivi un nuovo argomento: il sistema genera una nuova immagine ispirata allo stesso stile, più caption e CTA.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="file" accept="image/*" onChange={e => setRefImage(e.target.files?.[0] || null)} style={{ fontSize: 12 }} />
+          <input
+            type="text"
+            placeholder="Nuovo argomento (es. ansia da prestazione)"
+            value={refTopic}
+            onChange={e => setRefTopic(e.target.value)}
+            style={{ flex: 1, minWidth: 200, padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}
+          />
+          <button className="btn btn-primary btn-sm" onClick={generateFromReference} disabled={refGenerating}>
+            {refGenerating ? 'Generazione...' : 'Genera bozza'}
+          </button>
+        </div>
+      </div>
       {lastError && (
         <div className="info-box" style={{ background: 'rgba(248,113,113,0.12)', borderColor: 'var(--red)', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
           <i className="ti ti-alert-triangle" style={{ color: 'var(--red)' }} />
