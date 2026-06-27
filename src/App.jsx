@@ -439,6 +439,7 @@ function BozzeVirali({ toast }) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(null);
   const [publishing, setPublishing] = useState({});
   const [edits, setEdits] = useState({});
 
@@ -453,9 +454,31 @@ function BozzeVirali({ toast }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const STEP_LABELS = {
+    starting: 'Avvio...',
+    fetching_media: 'Scarico i post da Instagram...',
+    analyzing_insights: 'Analizzo le metriche',
+    analyzing_video: 'Analizzo i Reel con Gemini',
+    building_profile: 'Claude costruisce il profilo virale...',
+    generating_plan: 'Claude scrive il piano editoriale...',
+    done: 'Completato!',
+    error: 'Errore',
+  };
+
   const syncAnalytics = async () => {
     setSyncing(true);
-    toast('Sincronizzazione dati Instagram in corso (fino a 1 minuto)...');
+    setSyncProgress(null);
+    let polling = true;
+    const poll = async () => {
+      while (polling) {
+        try {
+          const rows = await sbNew(`sync_progress?user_id=eq.${ANALYTICS_USER_ID}&select=*`);
+          if (rows?.[0]) setSyncProgress(rows[0]);
+        } catch {}
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    };
+    poll();
     try {
       const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/content-intelligence`, {
         method: 'POST',
@@ -467,8 +490,11 @@ function BozzeVirali({ toast }) {
       if (data.error) toast('Errore sync: ' + data.error);
       else toast(`✅ Analizzati ${data.videos_analyzed ?? 0} post. Ora puoi generare le bozze.`);
     } catch (e) { toast('Errore sync: ' + e.message); }
+    polling = false;
     setSyncing(false);
+    setSyncProgress(null);
   };
+
 
   const [lastError, setLastError] = useState(null);
   const [scheduleAt, setScheduleAt] = useState({});
@@ -598,6 +624,16 @@ function BozzeVirali({ toast }) {
         <i className="ti ti-info-circle" />
         <span>Prima volta? Premi "Aggiorna analytics da Instagram" (scarica i dati reali di reach/saves dai tuoi post), poi "Genera nuove bozze ora". Da qui in poi succede tutto in automatico ogni lunedì.</span>
       </div>
+      {syncing && syncProgress && (
+        <div className="info-box" style={{ background: 'rgba(99,102,241,0.12)', borderColor: 'var(--accent2)' }}>
+          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', color: 'var(--accent2)' }} />
+          <span>
+            {STEP_LABELS[syncProgress.step] || syncProgress.step}
+            {syncProgress.total_items > 0 && ` (${syncProgress.current_item}/${syncProgress.total_items})`}
+            {syncProgress.detail ? ` — ${syncProgress.detail}` : ''}
+          </span>
+        </div>
+      )}
       {lastError && (
         <div className="info-box" style={{ background: 'rgba(248,113,113,0.12)', borderColor: 'var(--red)', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
           <i className="ti ti-alert-triangle" style={{ color: 'var(--red)' }} />
