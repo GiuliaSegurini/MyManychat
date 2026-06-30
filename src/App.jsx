@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { sb } from './supabase';
 import './App.css';
 
@@ -6,7 +7,9 @@ const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGN
 const IG_USER_ID = '26770455472615914';
 const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
-const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73'; // riga "profiles" nel progetto analytics, usata da generate-viral-drafts e publish-draft
+const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
+
+const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
 const sbNew = async (path, opts = {}) => {
   const res = await fetch(`${SUPABASE_URL_NEW}/rest/v1/${path}`, {
@@ -42,6 +45,59 @@ function Modal({ open, onClose, title, children }) {
       <div className="modal">
         <div className="modal-header"><span className="modal-title">{title}</span><button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button></div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) setError('Email o password errati');
+    else onLogin();
+  };
+
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117'}}>
+      <div style={{background:'#1a1d27',padding:'40px',borderRadius:'16px',width:'360px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}>
+        <div style={{textAlign:'center',marginBottom:'32px'}}>
+          <div style={{fontSize:'32px',marginBottom:'8px'}}>🧠</div>
+          <h1 style={{color:'white',fontSize:'22px',fontWeight:'700',margin:0}}>MyManychat</h1>
+          <p style={{color:'#888',fontSize:'14px',marginTop:'8px'}}>Accedi per continuare</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'12px',boxSizing:'border-box'}}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'16px',boxSizing:'border-box'}}
+          />
+          {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'15px',fontWeight:'600',border:'none',cursor:'pointer',opacity:loading?0.7:1}}
+          >
+            {loading ? 'Accesso...' : 'Accedi'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -864,6 +920,8 @@ function Performance({ toast }) {
 }
 
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
   const [stats, setStats] = useState({});
@@ -871,6 +929,23 @@ export default function App() {
   const toast = useCallback(msg => setToastMsg(msg), []);
 
   useEffect(() => {
+    supabaseAuth.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabaseAuth.auth.signOut();
+    setSession(null);
+  };
+
+  useEffect(() => {
+    if (!session) return;
     (async () => {
       try {
         const [flows, leads, kws, msgs] = await Promise.all([sb('ig_flows?select=id&is_active=eq.true'), sb('ig_leads?select=id'), sb('ig_keywords?select=id&is_active=eq.true'), sb('ig_messages?select=id&direction=eq.outbound')]);
@@ -882,7 +957,7 @@ export default function App() {
         setPosts(data.data || []);
       } catch (e) { console.error(e); }
     })();
-  }, []);
+  }, [session]);
 
   const nav = [
     { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
@@ -896,6 +971,18 @@ export default function App() {
     { id: 'config', icon: 'settings', label: 'Configurazione' },
   ];
 
+  if (authLoading) {
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117',color:'white',fontSize:'16px'}}>
+        Caricamento...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={() => {}} />;
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -906,7 +993,10 @@ export default function App() {
         <nav className="sidebar-nav">
           {nav.map(n => <button key={n.id} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => setPanel(n.id)}><i className={`ti ti-${n.icon}`} /><span>{n.label}</span></button>)}
         </nav>
-        <div className="sidebar-footer"><div className="status-dot" /><span>@neuroplasticity_training</span></div>
+        <div className="sidebar-footer">
+          <div className="status-dot" /><span>@neuroplasticity_training</span>
+          <button onClick={handleLogout} style={{marginLeft:'auto',background:'transparent',border:'1px solid #444',color:'#aaa',padding:'4px 10px',borderRadius:'6px',cursor:'pointer',fontSize:'12px'}}>Esci</button>
+        </div>
       </aside>
       <main className="main">
         {panel === 'dashboard' && <Dashboard stats={stats} posts={posts} />}
