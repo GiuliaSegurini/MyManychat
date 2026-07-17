@@ -54,7 +54,7 @@ function Posts({ toast }) {
     toast('Analisi AI in corso...');
 
     try {
-      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyzewclaude2`, {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -472,4 +472,3 @@ export default function App() {
     </div>
   );
 }
-
