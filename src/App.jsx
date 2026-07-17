@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@supabase/supabase-js';
 import { sb } from './supabase';
 import './App.css';
 
@@ -6,6 +7,26 @@ const IG_TOKEN = 'IGAAONH3T1zM9BZAGF3ZAnkxeDJVZAFBJZAXNFMUEwTmtJZAi0yN2xDYktERGN
 const IG_USER_ID = '26770455472615914';
 const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
+const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
+
+const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
+
+const sbNew = async (path, opts = {}) => {
+  const res = await fetch(`${SUPABASE_URL_NEW}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: opts.prefer !== undefined ? opts.prefer : 'return=representation',
+      ...opts.headers,
+    },
+    method: opts.method || 'GET',
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const t = await res.text();
+  return t ? JSON.parse(t) : [];
+};
 
 function Toast({ msg, onHide }) {
   useEffect(() => { if (msg) { const t = setTimeout(onHide, 2400); return () => clearTimeout(t); } }, [msg, onHide]);
@@ -24,6 +45,59 @@ function Modal({ open, onClose, title, children }) {
       <div className="modal">
         <div className="modal-header"><span className="modal-title">{title}</span><button className="modal-close" onClick={onClose}><i className="ti ti-x" /></button></div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) setError('Email o password errati');
+    else onLogin();
+  };
+
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117'}}>
+      <div style={{background:'#1a1d27',padding:'40px',borderRadius:'16px',width:'360px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}>
+        <div style={{textAlign:'center',marginBottom:'32px'}}>
+          <div style={{fontSize:'32px',marginBottom:'8px'}}>🧠</div>
+          <h1 style={{color:'white',fontSize:'22px',fontWeight:'700',margin:0}}>MyManychat</h1>
+          <p style={{color:'#888',fontSize:'14px',marginTop:'8px'}}>Accedi per continuare</p>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'12px',boxSizing:'border-box'}}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'16px',boxSizing:'border-box'}}
+          />
+          {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{width:'100%',padding:'12px',borderRadius:'8px',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'15px',fontWeight:'600',border:'none',cursor:'pointer',opacity:loading?0.7:1}}
+          >
+            {loading ? 'Accesso...' : 'Accedi'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -51,16 +125,16 @@ function Posts({ toast }) {
   const analyzeVideo = async (post) => {
     if (analyzing[post.id]) return;
     setAnalyzing(a => ({ ...a, [post.id]: true }));
-    toast('Analisi AI in corso...');
+    toast('Analisi video completo con Gemini in corso (fino a 40s)...');
 
     try {
-      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video`, {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-video-gemini`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ post_id: post.id, thumbnail_url: post.thumbnail_url }),
+        body: JSON.stringify({ post_id: post.id, user_id: ANALYTICS_USER_ID }),
       });
 
       const data = await res.json();
@@ -131,7 +205,7 @@ function Posts({ toast }) {
                     {analyses[p.id].objects?.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         <span style={{ fontSize: 11, color: 'var(--text3)', width: '100%' }}>OGGETTI</span>
-                        {[...new Set(analyses[p.id].objects.flatMap(o => o.tags))].map((tag, i) => (
+                        {analyses[p.id].objects.map((tag, i) => (
                           <span key={i} className="badge badge-gray">{tag}</span>
                         ))}
                       </div>
@@ -153,6 +227,18 @@ function Posts({ toast }) {
                         <span style={{ fontSize: 11, color: 'var(--text3)' }}>MOOD</span>
                         <span className="badge badge-pink">{analyses[p.id].mood}</span>
                         {analyses[p.id].content_type && <span className="badge badge-purple">{analyses[p.id].content_type}</span>}
+                      </div>
+                    )}
+                    {analyses[p.id].hook_effectiveness && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>🎯 Hook: </span>
+                        {analyses[p.id].hook_effectiveness}
+                      </div>
+                    )}
+                    {analyses[p.id].pacing_notes && (
+                      <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
+                        <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>⏱️ Ritmo: </span>
+                        {analyses[p.id].pacing_notes}
                       </div>
                     )}
                   </div>
@@ -293,14 +379,14 @@ function Flows({ toast }) {
 function Leads({ toast }) {
   const [leads, setLeads] = useState([]);
   useEffect(() => { (async () => { const l = await sb('ig_leads?select=*&order=created_at.desc'); setLeads(l); })(); }, []);
-  const exportCSV = () => { if (!leads.length) { toast('Nessun lead'); return; } const csv = ['ig_username,email,source,data', ...leads.map(l => `${l.ig_username || ''},${l.email || ''},${l.source || ''},${l.created_at}`)].join('\n'); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'ig_leads.csv'; a.click(); toast('CSV scaricato!'); };
+  const exportCSV = () => { if (!leads.length) { toast('Nessun lead'); return; } const csv = ['ig_username,nome,email,telefono,source,data', ...leads.map(l => `${l.ig_username || ''},${l.name || ''},${l.email || ''},${l.phone || ''},${l.source || ''},${l.created_at}`)].join('\n'); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'ig_leads.csv'; a.click(); toast('CSV scaricato!'); };
   return (
     <div className="panel">
       <div className="panel-header"><h1><i className="ti ti-users" /> Lead <span className="count-badge">{leads.length}</span></h1><button className="btn" onClick={exportCSV}><i className="ti ti-download" /> Esporta CSV</button></div>
       <div className="card list-card">
-        <div className="lead-header"><span>Utente</span><span>Email</span><span>Fonte</span><span>Data</span></div>
+        <div className="lead-header"><span>Utente</span><span>Email</span><span>Telefono</span><span>Fonte</span><span>Data</span></div>
         {!leads.length && <div className="empty">Nessun lead ancora</div>}
-        {leads.map(l => <div key={l.id} className="lead-row"><div className="lead-name"><div className="avatar">{(l.ig_username || '?').slice(0, 2).toUpperCase()}</div><span>@{l.ig_username || '—'}</span></div><span className="lead-email">{l.email || '—'}</span><Badge color="purple">{l.source || '—'}</Badge><span className="lead-date">{new Date(l.created_at).toLocaleDateString('it')}</span></div>)}
+        {leads.map(l => <div key={l.id} className="lead-row"><div className="lead-name"><div className="avatar">{(l.ig_username || l.name || '?').slice(0, 2).toUpperCase()}</div><span>{l.ig_username ? '@' + l.ig_username : (l.name || '—')}</span></div><span className="lead-email">{l.email || '—'}</span><span className="lead-email">{l.phone || '—'}</span><Badge color="purple">{l.source || '—'}</Badge><span className="lead-date">{new Date(l.created_at).toLocaleDateString('it')}</span></div>)}
       </div>
     </div>
   );
@@ -416,7 +502,586 @@ function CommentRules({ toast }) {
   );
 }
 
+function BozzeVirali({ toast }) {
+  const [drafts, setDrafts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [publishing, setPublishing] = useState({});
+  const [edits, setEdits] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await sbNew(`editorial_posts?user_id=eq.${ANALYTICS_USER_ID}&generated_image_url=not.is.null&order=created_at.desc`);
+      setDrafts(d);
+    } catch (e) { toast('Errore caricamento bozze'); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const STEP_LABELS = {
+    starting: 'Avvio...',
+    fetching_media: 'Scarico i post da Instagram...',
+    analyzing_insights: 'Analizzo le metriche',
+    analyzing_video: 'Analizzo i Reel con Gemini',
+    building_profile: 'Claude costruisce il profilo virale...',
+    generating_plan: 'Claude scrive il piano editoriale...',
+    done: 'Completato!',
+    error: 'Errore',
+  };
+
+  const syncAnalytics = async () => {
+    setSyncing(true);
+    setSyncProgress(null);
+    let polling = true;
+    const poll = async () => {
+      while (polling) {
+        try {
+          const rows = await sbNew(`sync_progress?user_id=eq.${ANALYTICS_USER_ID}&select=*`);
+          if (rows?.[0]) setSyncProgress(rows[0]);
+        } catch {}
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    };
+    poll();
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/content-intelligence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.debug_insights_sample) window.alert(JSON.stringify(data.debug_insights_sample, null, 2));
+      if (data.error) toast('Errore sync: ' + data.error);
+      else toast(`✅ Analizzati ${data.videos_analyzed ?? 0} post. Ora puoi generare le bozze.`);
+    } catch (e) { toast('Errore sync: ' + e.message); }
+    polling = false;
+    setSyncing(false);
+    setSyncProgress(null);
+  };
+
+
+  const [lastError, setLastError] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState({});
+
+  const [refImage, setRefImage] = useState(null);
+  const [refTopic, setRefTopic] = useState('');
+  const [refGenerating, setRefGenerating] = useState(false);
+
+  const generateFromReference = async () => {
+    if (!refImage || !refTopic.trim()) { toast('Carica un\'immagine e scrivi un topic'); return; }
+    setRefGenerating(true);
+    try {
+      const fileName = `${ANALYTICS_USER_ID}/ref-${Date.now()}-${refImage.name}`;
+      const uploadRes = await fetch(`${SUPABASE_URL_NEW}/storage/v1/object/reference-images/${fileName}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': refImage.type },
+        body: refImage,
+      });
+      if (!uploadRes.ok) throw new Error('Upload immagine fallito: ' + await uploadRes.text());
+      const referenceImageUrl = `${SUPABASE_URL_NEW}/storage/v1/object/public/reference-images/${fileName}`;
+
+      toast('Generazione in corso, può richiedere fino a 30-40 secondi...');
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/generate-draft-from-reference`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID, reference_image_url: referenceImageUrl, topic: refTopic.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else { toast('✅ Bozza creata dal riferimento!'); setRefImage(null); setRefTopic(''); load(); }
+    } catch (e) { toast('Errore: ' + e.message); }
+    setRefGenerating(false);
+  };
+
+  const saveEdits = async (id) => {
+    const edit = edits[id];
+    if (!edit) return;
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', prefer: 'return=minimal', body: edit });
+      toast('✅ Modifiche salvate');
+      setEdits(e => { const n = { ...e }; delete n[id]; return n; });
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const schedule = async (id) => {
+    const when = scheduleAt[id];
+    if (!when) { toast('Scegli prima data e ora'); return; }
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { status: 'scheduled', scheduled_for: new Date(when).toISOString() },
+      });
+      toast('📅 Programmata!');
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const unschedule = async (id) => {
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { status: 'draft_ready', scheduled_for: null },
+      });
+      toast('Programmazione annullata');
+      load();
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const generate = async () => {
+    setGenerating(true);
+    toast('Generazione bozze in corso, può richiedere un minuto...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/generate-viral-drafts`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      setLastError(JSON.stringify(data, null, 2));
+      if (data.error) toast('Errore: ' + data.error);
+      else toast(`✅ ${data.drafts_created || 0} nuove bozze generate!`);
+    } catch (e) { setLastError('Errore di rete: ' + e.message); toast('Errore: ' + e.message); }
+    setGenerating(false);
+    load();
+  };
+
+  const publish = async (id) => {
+    setPublishing(p => ({ ...p, [id]: true }));
+    const edit = edits[id];
+    try {
+      if (edit) await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', body: edit, prefer: 'return=minimal' });
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/publish-draft`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: id }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore pubblicazione: ' + data.error);
+      else toast('✅ Pubblicato su Instagram!');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setPublishing(p => ({ ...p, [id]: false }));
+    load();
+  };
+
+  const discard = async (id) => {
+    if (!window.confirm('Scartare questa bozza?')) return;
+    try {
+      await sbNew(`editorial_posts?id=eq.${id}`, { method: 'DELETE', prefer: '' });
+      toast('Bozza scartata');
+      setDrafts(d => d.filter(x => x.id !== id));
+    } catch (e) { toast('Errore: ' + e.message); }
+  };
+
+  const setEdit = (id, field, value) => setEdits(e => ({ ...e, [id]: { ...e[id], [field]: value } }));
+  const val = (d, field) => (edits[d.id]?.[field] !== undefined ? edits[d.id][field] : d[field]);
+
+  const statusBadge = (status) => {
+    const map = { draft_ready: ['Pronta', 'purple'], scheduled: ['Programmata', 'amber'], publishing: ['Pubblicazione...', 'amber'], published: ['Pubblicata', 'green'], failed: ['Errore', 'pink'] };
+    const [label, color] = map[status] || [status, 'gray'];
+    return <Badge color={color}>{label}</Badge>;
+  };
+
+  return (
+    <div className="panel">
+      <style>{`
+        .draft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+        .draft-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+        .draft-img-wrap{position:relative;padding-bottom:125%;overflow:hidden;background:var(--bg3)}
+        .draft-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+        .draft-body{padding:14px;display:flex;flex-direction:column;gap:8px}
+        .draft-topic{font-size:14px;font-weight:600;color:var(--text)}
+        .draft-why{font-size:11px;color:var(--text3);font-style:italic}
+        .draft-error{font-size:11px;color:var(--red)}
+        .draft-score{font-size:11px;color:var(--text3)}
+        .draft-row{display:flex;align-items:center;justify-content:space-between}
+        .draft-actions{display:flex;gap:6px;margin-top:4px}
+      `}</style>
+      <div className="panel-header">
+        <h1><i className="ti ti-sparkles" /> Bozze virali</h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={syncAnalytics} disabled={syncing}>
+            {syncing
+              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Sincronizzazione...</>
+              : <><i className="ti ti-refresh" /> Aggiorna analytics da Instagram</>}
+          </button>
+          <button className="btn btn-primary" onClick={generate} disabled={generating}>
+            {generating
+              ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Generazione...</>
+              : <><i className="ti ti-wand" /> Genera nuove bozze ora</>}
+          </button>
+        </div>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Prima volta? Premi "Aggiorna analytics da Instagram" (scarica i dati reali di reach/saves dai tuoi post), poi "Genera nuove bozze ora". Da qui in poi succede tutto in automatico ogni lunedì.</span>
+      </div>
+      {syncing && syncProgress && (
+        <div className="info-box" style={{ background: 'rgba(99,102,241,0.12)', borderColor: 'var(--accent2)' }}>
+          <i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite', color: 'var(--accent2)' }} />
+          <span>
+            {STEP_LABELS[syncProgress.step] || syncProgress.step}
+            {syncProgress.total_items > 0 && ` (${syncProgress.current_item}/${syncProgress.total_items})`}
+            {syncProgress.detail ? ` — ${syncProgress.detail}` : ''}
+          </span>
+        </div>
+      )}
+      <div className="info-box" style={{ background: 'rgba(168,85,247,0.1)', borderColor: '#a855f7', display: 'block' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <i className="ti ti-photo-up" style={{ color: '#a855f7' }} />
+          <strong>Crea da immagine di riferimento</strong>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+          Carica un'immagine che è andata virale (tua o di altri) e scrivi un nuovo argomento: il sistema genera una nuova immagine ispirata allo stesso stile, più caption e CTA.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="file" accept="image/*" onChange={e => setRefImage(e.target.files?.[0] || null)} style={{ fontSize: 12 }} />
+          <input
+            type="text"
+            placeholder="Nuovo argomento (es. ansia da prestazione)"
+            value={refTopic}
+            onChange={e => setRefTopic(e.target.value)}
+            style={{ flex: 1, minWidth: 200, padding: 8, borderRadius: 6, border: '1px solid var(--border)' }}
+          />
+          <button className="btn btn-primary btn-sm" onClick={generateFromReference} disabled={refGenerating}>
+            {refGenerating ? 'Generazione...' : 'Genera bozza'}
+          </button>
+        </div>
+      </div>
+      {lastError && (
+        <div className="info-box" style={{ background: 'rgba(248,113,113,0.12)', borderColor: 'var(--red)', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
+          <i className="ti ti-alert-triangle" style={{ color: 'var(--red)' }} />
+          <span>{lastError}</span>
+        </div>
+      )}
+      {loading && <div className="empty">Caricamento...</div>}
+      {!loading && !drafts.length && <div className="empty">Nessuna bozza ancora. Premi "Genera nuove bozze ora" per crearne subito.</div>}
+      <div className="draft-grid">
+        {drafts.map(d => (
+          <div key={d.id} className="draft-card">
+            <div className="draft-img-wrap"><img src={d.generated_image_url} alt={d.topic} className="draft-img" /></div>
+            <div className="draft-body">
+              <div className="draft-row">
+                {statusBadge(d.status)}
+                {d.audience_growth_score != null && <span className="draft-score">score {Number(d.audience_growth_score).toFixed(2)}</span>}
+              </div>
+              <span className="draft-topic">{d.topic}</span>
+              <div className="form-group">
+                <label>Caption</label>
+                <textarea value={val(d, 'caption_suggestion') || ''} onChange={e => setEdit(d.id, 'caption_suggestion', e.target.value)} disabled={d.status === 'published'} rows={4} />
+              </div>
+              <div className="form-group">
+                <label>Call to action</label>
+                <input value={val(d, 'cta_suggestion') || ''} onChange={e => setEdit(d.id, 'cta_suggestion', e.target.value)} disabled={d.status === 'published'} />
+              </div>
+              {d.why_suggested && <p className="draft-why">{d.why_suggested}</p>}
+              {d.status === 'failed' && d.publish_error && <p className="draft-error">{d.publish_error}</p>}
+              {d.status === 'scheduled' && d.scheduled_for && (
+                <p className="draft-score">Programmata per: {new Date(d.scheduled_for).toLocaleString('it-IT')}</p>
+              )}
+              {(d.status === 'draft_ready' || d.status === 'failed') && (
+                <div className="form-group">
+                  <label>Programma per</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt[d.id] || ''}
+                    onChange={e => setScheduleAt(s => ({ ...s, [d.id]: e.target.value }))}
+                  />
+                </div>
+              )}
+              {d.status !== 'published' && d.status !== 'scheduled' && (
+                <div className="draft-actions">
+                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => publish(d.id)} disabled={publishing[d.id] || d.status === 'publishing'}>
+                    {publishing[d.id] || d.status === 'publishing' ? 'Pubblicazione...' : 'Pubblica ora'}
+                  </button>
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => schedule(d.id)}>Programma</button>
+                  <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
+                </div>
+              )}
+              {d.status === 'scheduled' && (
+                <div className="draft-actions">
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => saveEdits(d.id)} disabled={!edits[d.id]}>Salva modifiche</button>
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => unschedule(d.id)}>Annulla programmazione</button>
+                  <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
+                </div>
+              )}
+              {d.status === 'published' && d.published_media_id && <span className="draft-score">media ID: {d.published_media_id}</span>}
+              {(d.resource_pdf_url || d.stripe_payment_link) && (
+                <div className="draft-row" style={{ marginTop: 6, gap: 10 }}>
+                  {d.resource_pdf_url && <a href={d.resource_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>📄 Vedi PDF guida</a>}
+                  {d.stripe_payment_link && <a href={d.stripe_payment_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>💳 Link pagamento</a>}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Performance({ toast }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/effectiveness-report`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else setReport(data);
+    } catch (e) { toast('Errore: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { loadReport(); }, [loadReport]);
+
+  const diffPct = (sys, base) => {
+    if (!base) return null;
+    const pct = ((sys - base) / base) * 100;
+    return pct;
+  };
+
+  const StatDiff = ({ label, sys, base, suffix = '' }) => {
+    const pct = diffPct(sys, base);
+    const positive = pct != null && pct >= 0;
+    return (
+      <div className="form-group" style={{ marginBottom: 4 }}>
+        <label>{label}</label>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: 20, fontWeight: 700 }}>{sys}{suffix}</span>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>vs storico {base}{suffix}</span>
+          {pct != null && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: positive ? '#22c55e' : '#f87171' }}>
+              {positive ? '▲' : '▼'} {Math.abs(pct).toFixed(0)}%
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h1><i className="ti ti-chart-line" /> Performance del sistema</h1>
+        <button className="btn" onClick={loadReport} disabled={loading}>
+          {loading ? <><i className="ti ti-loader-2" style={{ animation: 'spin 1s linear infinite' }} /> Aggiorno...</> : <><i className="ti ti-refresh" /> Aggiorna report</>}
+        </button>
+      </div>
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Confronta i post generati automaticamente dal sistema con lo storico precedente, e mostra il funnel reale (commenti → DM → pagamenti Stripe).</span>
+      </div>
+
+      {!report && !loading && <div className="empty">Nessun dato ancora.</div>}
+
+      {report && (
+        <>
+          <div className="draft-grid" style={{ marginBottom: 24 }}>
+            <div className="draft-card" style={{ padding: 16 }}>
+              <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Contenuto — sistema vs storico</span>
+              <StatDiff label="Reach medio" sys={report.contenuto.sistema.avg_reach} base={report.contenuto.storico_precedente.avg_reach} />
+              <StatDiff label="Saves medi" sys={report.contenuto.sistema.avg_saves} base={report.contenuto.storico_precedente.avg_saves} />
+              <StatDiff label="Engagement rate" sys={(report.contenuto.sistema.avg_engagement_rate * 100).toFixed(2)} base={(report.contenuto.storico_precedente.avg_engagement_rate * 100).toFixed(2)} suffix="%" />
+              <p className="draft-score" style={{ marginTop: 10 }}>
+                Basato su {report.contenuto.sistema.post_pubblicati} post del sistema vs {report.contenuto.storico_precedente.post_totali} storici.
+                {report.contenuto.sistema.post_pubblicati < 10 && ' Campione ancora piccolo: i numeri si stabilizzano con più post pubblicati.'}
+              </p>
+            </div>
+            <div className="draft-card" style={{ padding: 16 }}>
+              <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Funnel di monetizzazione</span>
+              <div className="form-group"><label>Guide create</label><span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.guide_create}</span></div>
+              <div className="form-group"><label>DM inviati da keyword</label><span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.dm_inviati_da_keyword}</span></div>
+              <div className="form-group">
+                <label>Pagamenti completati</label>
+                {report.funnel.stripe_errore
+                  ? <p className="draft-error">{report.funnel.stripe_errore}</p>
+                  : <span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.pagamenti_completati} — €{report.funnel.fatturato_euro.toFixed(2)}</span>}
+              </div>
+            </div>
+          </div>
+          <p className="draft-score">Generato: {new Date(report.generated_at).toLocaleString('it-IT')}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MiniLineChart({ data, color = 'var(--accent2)', height = 140 }) {
+  if (!data || data.length < 2) return <div className="empty" style={{ padding: 20 }}>Dati insufficienti per il grafico</div>;
+  const width = 600;
+  const values = data.map(d => d.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 8;
+  const points = data.map((d, i) => {
+    const x = pad + (i / (data.length - 1)) * (width - pad * 2);
+    const y = pad + (1 - (d.value - min) / range) * (height - pad * 2);
+    return `${x},${y}`;
+  });
+  const pathD = 'M' + points.join(' L');
+  const areaD = `${pathD} L${width - pad},${height - pad} L${pad},${height - pad} Z`;
+  const gradId = 'followerFillGrad';
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height, display: 'block' }} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${gradId})`} stroke="none" />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const DAY_NAMES = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+const num = v => (v === null || v === undefined ? null : Number(v));
+
+function Crescita({ toast }) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [snaps, profiles, plans] = await Promise.all([
+        sbNew(`account_snapshots?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=snapshot_date.asc`),
+        sbNew(`viral_profile?user_id=eq.${ANALYTICS_USER_ID}&select=*`),
+        sbNew(`editorial_plan?user_id=eq.${ANALYTICS_USER_ID}&select=week_start,week_end,insights,based_on_videos,total_posts&order=week_start.desc&limit=1`),
+      ]);
+      setSnapshots(snaps || []);
+      setProfile(profiles?.[0] || null);
+      setPlan(plans?.[0] || null);
+    } catch (e) { toast('Errore caricamento crescita: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="panel"><div className="empty">Caricamento...</div></div>;
+
+  const first = snapshots[0];
+  const last = snapshots[snapshots.length - 1];
+  const followerDelta = first && last ? last.followers_count - first.followers_count : 0;
+  const followerPct = first && first.followers_count ? ((followerDelta / first.followers_count) * 100).toFixed(2) : null;
+  const chartData = snapshots.map(s => ({ value: s.followers_count, date: s.snapshot_date }));
+
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <h1><i className="ti ti-trending-up" /> Crescita & Strategia</h1>
+        <button className="btn" onClick={load}><i className="ti ti-refresh" /> Aggiorna</button>
+      </div>
+
+      <div className="info-box">
+        <i className="ti ti-info-circle" />
+        <span>Andamento follower giorno per giorno e pattern strategici (orari, hook, topic) ricavati dall'analisi dei tuoi post. I dati vengono raccolti automaticamente ogni giorno.</span>
+      </div>
+
+      {snapshots.length === 0 && <div className="empty">Nessuno snapshot ancora registrato.</div>}
+
+      {snapshots.length > 0 && (
+        <div className="draft-card" style={{ padding: 16, marginBottom: 24 }}>
+          <div className="draft-row" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <span className="draft-topic" style={{ fontSize: 22 }}>{last.followers_count.toLocaleString('it-IT')}</span>
+              <div className="draft-score">follower al {new Date(last.snapshot_date).toLocaleDateString('it-IT')}</div>
+            </div>
+            {followerPct !== null && (
+              <Badge color={followerDelta >= 0 ? 'green' : 'pink'}>
+                {followerDelta >= 0 ? '▲' : '▼'} {followerDelta >= 0 ? '+' : ''}{followerDelta} ({followerPct}%) su {snapshots.length} giorni
+              </Badge>
+            )}
+          </div>
+          <MiniLineChart data={chartData} />
+          <div className="draft-row" style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
+            <span>{new Date(first.snapshot_date).toLocaleDateString('it-IT')}</span>
+            <span>{new Date(last.snapshot_date).toLocaleDateString('it-IT')}</span>
+          </div>
+        </div>
+      )}
+
+      {profile && (
+        <div className="draft-grid" style={{ marginBottom: 24 }}>
+          <div className="draft-card" style={{ padding: 16 }}>
+            <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Pattern vincenti</span>
+            <div className="form-group"><label>Giorni migliori</label><span>{(profile.best_days || []).map(d => DAY_NAMES[d]).join(', ') || '—'}</span></div>
+            <div className="form-group"><label>Orari migliori</label><span>{(profile.best_hours || []).map(h => `${h}:00`).join(', ') || '—'}</span></div>
+            <div className="form-group"><label>Durata ideale (Reel)</label><span>{profile.best_duration_seconds ? `~${profile.best_duration_seconds}s (${profile.best_duration_range?.min}-${profile.best_duration_range?.max}s)` : '—'}</span></div>
+            <div className="form-group"><label>Engagement rate medio</label><span>{profile.avg_engagement_rate ? `${(num(profile.avg_engagement_rate) * 100).toFixed(2)}%` : '—'}</span></div>
+            {profile.trend_direction && (
+              <div className="form-group">
+                <label>Trend reach</label>
+                <span style={{ color: profile.trend_direction === 'in calo' ? 'var(--red)' : 'var(--green)' }}>
+                  {profile.trend_direction} ({num(profile.trend_pct_change)}%) — {Math.round(num(profile.trend_recent_avg_reach))} vs {Math.round(num(profile.trend_previous_avg_reach))} reach medio
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="draft-card" style={{ padding: 16 }}>
+            <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Topic più forti</span>
+            {(profile.top_topics || []).slice(0, 5).map((t, i) => (
+              <div key={i} className="form-group" style={{ marginBottom: 6 }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{t.topic}</span>
+                  <span style={{ color: 'var(--text3)' }}>{(num(t.avg_engagement) * 100).toFixed(1)}% ER</span>
+                </label>
+              </div>
+            ))}
+          </div>
+
+          <div className="draft-card" style={{ padding: 16 }}>
+            <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Hook che funzionano</span>
+            {(profile.top_hooks || []).slice(0, 5).map((h, i) => (
+              <p key={i} className="draft-why" style={{ marginBottom: 6 }}>• {h}</p>
+            ))}
+          </div>
+
+          <div className="draft-card" style={{ padding: 16 }}>
+            <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>CTA migliori</span>
+            {(profile.top_cta || []).map((c, i) => (
+              <p key={i} className="draft-why" style={{ marginBottom: 6 }}>• {c}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!profile && <div className="empty">Nessun profilo virale ancora calcolato. Vai su "Bozze virali" e premi "Aggiorna analytics da Instagram".</div>}
+
+      {plan?.insights && (
+        <div className="draft-card" style={{ padding: 16 }}>
+          <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>
+            Strategia editoriale — settimana {new Date(plan.week_start).toLocaleDateString('it-IT')} - {new Date(plan.week_end).toLocaleDateString('it-IT')}
+          </span>
+          <p className="draft-why" style={{ fontSize: 13, fontStyle: 'normal', lineHeight: 1.5 }}>{plan.insights}</p>
+          <p className="draft-score" style={{ marginTop: 8 }}>Basato su {plan.based_on_videos} post analizzati · {plan.total_posts} post pianificati</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
   const [stats, setStats] = useState({});
@@ -424,6 +1089,23 @@ export default function App() {
   const toast = useCallback(msg => setToastMsg(msg), []);
 
   useEffect(() => {
+    supabaseAuth.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabaseAuth.auth.signOut();
+    setSession(null);
+  };
+
+  useEffect(() => {
+    if (!session) return;
     (async () => {
       try {
         const [flows, leads, kws, msgs] = await Promise.all([sb('ig_flows?select=id&is_active=eq.true'), sb('ig_leads?select=id'), sb('ig_keywords?select=id&is_active=eq.true'), sb('ig_messages?select=id&direction=eq.outbound')]);
@@ -435,17 +1117,32 @@ export default function App() {
         setPosts(data.data || []);
       } catch (e) { console.error(e); }
     })();
-  }, []);
+  }, [session]);
 
   const nav = [
     { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
     { id: 'posts', icon: 'photo', label: 'Post' },
+    { id: 'bozze', icon: 'sparkles', label: 'Bozze virali' },
+    { id: 'crescita', icon: 'trending-up', label: 'Crescita & Strategia' },
+    { id: 'performance', icon: 'chart-line', label: 'Performance' },
     { id: 'flows', icon: 'git-branch', label: 'Flow' },
     { id: 'keywords', icon: 'tag', label: 'Parole chiave' },
     { id: 'leads', icon: 'users', label: 'Lead' },
     { id: 'comments', icon: 'message-forward', label: 'Auto-DM commenti' },
     { id: 'config', icon: 'settings', label: 'Configurazione' },
   ];
+
+  if (authLoading) {
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117',color:'white',fontSize:'16px'}}>
+        Caricamento...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={() => {}} />;
+  }
 
   return (
     <div className="app">
@@ -457,11 +1154,17 @@ export default function App() {
         <nav className="sidebar-nav">
           {nav.map(n => <button key={n.id} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => setPanel(n.id)}><i className={`ti ti-${n.icon}`} /><span>{n.label}</span></button>)}
         </nav>
-        <div className="sidebar-footer"><div className="status-dot" /><span>@neuroplasticity_training</span></div>
+        <div className="sidebar-footer">
+          <div className="status-dot" /><span>@neuroplasticity_training</span>
+          <button onClick={handleLogout} style={{marginLeft:'auto',background:'transparent',border:'1px solid #444',color:'#aaa',padding:'4px 10px',borderRadius:'6px',cursor:'pointer',fontSize:'12px'}}>Esci</button>
+        </div>
       </aside>
       <main className="main">
         {panel === 'dashboard' && <Dashboard stats={stats} posts={posts} />}
         {panel === 'posts' && <Posts toast={toast} />}
+        {panel === 'bozze' && <BozzeVirali toast={toast} />}
+        {panel === 'crescita' && <Crescita toast={toast} />}
+        {panel === 'performance' && <Performance toast={toast} />}
         {panel === 'flows' && <Flows toast={toast} />}
         {panel === 'keywords' && <Keywords toast={toast} />}
         {panel === 'leads' && <Leads toast={toast} />}
