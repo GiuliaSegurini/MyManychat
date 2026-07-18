@@ -1041,6 +1041,77 @@ function CompetitorComparison({ toast, myFollowers }) {
   );
 }
 
+function TopCompetitorPosts({ toast }) {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await sbNew(`competitor_top_posts?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=engagement_score.desc`);
+      setPosts(d || []);
+    } catch (e) { toast('Errore caricamento post concorrenti: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    toast('Analisi post concorrenti in corso, può richiedere fino a 20 secondi...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/capture-competitor-top-posts`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID, top_n: 5 }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else toast('✅ Post concorrenti aggiornati');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setRefreshing(false);
+    load();
+  };
+
+  if (loading) return null;
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div className="draft-row" style={{ marginBottom: 10 }}>
+        <span className="section-title" style={{ marginBottom: 0 }}>Reel/post più virali dei concorrenti</span>
+        <button className="btn btn-sm" onClick={refresh} disabled={refreshing}>
+          {refreshing ? 'Analisi...' : <><i className="ti ti-refresh" /> Aggiorna</>}
+        </button>
+      </div>
+
+      {!posts.length && <div className="empty">Nessun dato ancora. Premi "Aggiorna" (analizza i post recenti di ogni concorrente e trova i più virali).</div>}
+
+      {!!posts.length && (
+        <div className="draft-grid">
+          {posts.slice(0, 12).map(p => (
+            <div key={p.id} className="draft-card" style={{ padding: 16 }}>
+              <div className="draft-row" style={{ marginBottom: 8 }}>
+                <span className="draft-topic" style={{ fontSize: 13 }}>@{p.competitor_username}</span>
+                {p.product_type === 'clips' && <Badge color="purple">Reel</Badge>}
+              </div>
+              <p className="draft-why" style={{ fontSize: 12, fontStyle: 'normal', lineHeight: 1.5, maxHeight: 90, overflow: 'hidden' }}>
+                {(p.caption_text || 'Nessuna caption').slice(0, 200)}{(p.caption_text || '').length > 200 ? '…' : ''}
+              </p>
+              <div className="draft-row" style={{ marginTop: 10, fontSize: 12, color: 'var(--text3)' }}>
+                <span><i className="ti ti-heart" /> {(p.like_count ?? 0).toLocaleString('it-IT')}</span>
+                <span><i className="ti ti-message-circle" /> {(p.comment_count ?? 0).toLocaleString('it-IT')}</span>
+                {p.play_count > 0 && <span><i className="ti ti-eye" /> {(p.play_count).toLocaleString('it-IT')}</span>}
+              </div>
+              {p.permalink && <a href={p.permalink} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)', marginTop: 8, display: 'inline-block' }}>Apri su Instagram →</a>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Crescita({ toast }) {
   const [snapshots, setSnapshots] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -1108,6 +1179,8 @@ function Crescita({ toast }) {
       )}
 
       <CompetitorComparison toast={toast} myFollowers={last?.followers_count} />
+
+      <TopCompetitorPosts toast={toast} />
 
       {profile && (
         <div className="draft-grid" style={{ marginBottom: 24 }}>
