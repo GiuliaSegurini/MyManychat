@@ -1188,6 +1188,76 @@ function TopCompetitorPosts({ toast }) {
   );
 }
 
+function ReelFilmingTips({ toast }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await sbNew(`reel_filming_tips?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=generated_at.desc&limit=1`);
+      setData(d?.[0] || null);
+    } catch (e) { toast('Errore caricamento consigli: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const generate = async () => {
+    setGenerating(true);
+    toast('Generazione consigli in corso...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/generate-reel-filming-tips`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const d = await res.json();
+      if (d.error) toast('Errore: ' + d.error);
+      else toast('✅ Consigli generati');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setGenerating(false);
+    load();
+  };
+
+  if (loading) return null;
+
+  const CATEGORY_ICON = { hook: 'bolt', camera: 'camera', montaggio: 'scissors', sottotitoli: 'align-left', tono: 'microphone', durata: 'clock' };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div className="draft-row" style={{ marginBottom: 10 }}>
+        <span className="section-title" style={{ marginBottom: 0 }}>Consigli per girare i tuoi Reel a mano</span>
+        <button className="btn btn-sm" onClick={generate} disabled={generating}>
+          {generating ? 'Generazione...' : <><i className="ti ti-wand" /> Genera consigli</>}
+        </button>
+      </div>
+
+      {!data && <div className="empty">Nessun consiglio ancora. Premi "Genera consigli" (richiede almeno un'analisi Reel concorrenti già fatta).</div>}
+
+      {data && (
+        <>
+          <div className="draft-grid">
+            {(data.tips || []).map((t, i) => (
+              <div key={i} className="draft-card" style={{ padding: 16 }}>
+                <div className="draft-row" style={{ marginBottom: 8 }}>
+                  <Badge color="purple"><i className={`ti ti-${CATEGORY_ICON[t.categoria] || 'sparkles'}`} /> {t.categoria}</Badge>
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.5, marginBottom: 6 }}>{t.consiglio}</p>
+                {t.perche && <p className="draft-why">{t.perche}</p>}
+              </div>
+            ))}
+          </div>
+          <p className="draft-score" style={{ marginTop: 10 }}>
+            Basato su {data.based_on_count} Reel analizzati · generato {new Date(data.generated_at).toLocaleString('it-IT')}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Crescita({ toast }) {
   const [snapshots, setSnapshots] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -1257,6 +1327,8 @@ function Crescita({ toast }) {
       <CompetitorComparison toast={toast} myFollowers={last?.followers_count} />
 
       <TopCompetitorPosts toast={toast} />
+
+      <ReelFilmingTips toast={toast} />
 
       {profile && (
         <div className="draft-grid" style={{ marginBottom: 24 }}>
