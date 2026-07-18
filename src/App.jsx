@@ -1043,17 +1043,26 @@ function CompetitorComparison({ toast, myFollowers }) {
 
 function TopCompetitorPosts({ toast }) {
   const [posts, setPosts] = useState([]);
+  const [videoAnalysis, setVideoAnalysis] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await sbNew(`competitor_top_posts?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=engagement_score.desc`);
+      const [d, va] = await Promise.all([
+        sbNew(`competitor_top_posts?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=engagement_score.desc`),
+        sbNew(`competitor_video_analysis?user_id=eq.${ANALYTICS_USER_ID}&status=eq.done&select=*`),
+      ]);
       setPosts(d || []);
+      const map = {};
+      (va || []).forEach(a => { map[a.media_pk] = a; });
+      setVideoAnalysis(map);
     } catch (e) { toast('Errore caricamento post concorrenti: ' + e.message); }
     setLoading(false);
   }, [toast]);
+
 
   useEffect(() => { load(); }, [load]);
 
@@ -1074,15 +1083,37 @@ function TopCompetitorPosts({ toast }) {
     load();
   };
 
+  const analyzeVideos = async () => {
+    setAnalyzing(true);
+    toast('Analisi Reel in corso con Gemini, può richiedere fino a 2 minuti...');
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/analyze-competitor-videos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID, per_competitor: 2 }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else toast('✅ Analisi Reel completata');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setAnalyzing(false);
+    load();
+  };
+
   if (loading) return null;
 
   return (
     <div style={{ marginBottom: 24 }}>
       <div className="draft-row" style={{ marginBottom: 10 }}>
         <span className="section-title" style={{ marginBottom: 0 }}>Reel/post più virali dei concorrenti</span>
-        <button className="btn btn-sm" onClick={refresh} disabled={refreshing}>
-          {refreshing ? 'Analisi...' : <><i className="ti ti-refresh" /> Aggiorna</>}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-sm" onClick={refresh} disabled={refreshing}>
+            {refreshing ? 'Analisi...' : <><i className="ti ti-refresh" /> Aggiorna</>}
+          </button>
+          <button className="btn btn-sm" onClick={analyzeVideos} disabled={analyzing}>
+            {analyzing ? 'Analisi...' : <><i className="ti ti-video" /> Analizza Reel</>}
+          </button>
+        </div>
       </div>
 
       {!posts.length && <div className="empty">Nessun dato ancora. Premi "Aggiorna" (analizza i post recenti di ogni concorrente e trova i più virali).</div>}
@@ -1103,7 +1134,26 @@ function TopCompetitorPosts({ toast }) {
                 <span><i className="ti ti-message-circle" /> {(p.comment_count ?? 0).toLocaleString('it-IT')}</span>
                 {p.play_count > 0 && <span><i className="ti ti-eye" /> {(p.play_count).toLocaleString('it-IT')}</span>}
               </div>
+              {videoAnalysis[p.media_pk] && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    {videoAnalysis[p.media_pk].content_type && <Badge color="green">{videoAnalysis[p.media_pk].content_type}</Badge>}
+                    {videoAnalysis[p.media_pk].mood && <Badge color="amber">{videoAnalysis[p.media_pk].mood}</Badge>}
+                  </div>
+                  {videoAnalysis[p.media_pk].hook_effectiveness && (
+                    <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4, marginBottom: 4 }}>
+                      <strong style={{ color: 'var(--accent2)' }}>Hook: </strong>{videoAnalysis[p.media_pk].hook_effectiveness}
+                    </p>
+                  )}
+                  {videoAnalysis[p.media_pk].pacing_notes && (
+                    <p style={{ fontSize: 11, color: 'var(--text2)', lineHeight: 1.4 }}>
+                      <strong style={{ color: 'var(--accent2)' }}>Ritmo: </strong>{videoAnalysis[p.media_pk].pacing_notes}
+                    </p>
+                  )}
+                </div>
+              )}
               {p.permalink && <a href={p.permalink} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)', marginTop: 8, display: 'inline-block' }}>Apri su Instagram →</a>}
+
             </div>
           ))}
         </div>
