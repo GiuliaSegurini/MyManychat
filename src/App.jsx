@@ -952,6 +952,95 @@ function MiniLineChart({ data, color = 'var(--accent2)', height = 140 }) {
 const DAY_NAMES = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const num = v => (v === null || v === undefined ? null : Number(v));
 
+function CompetitorComparison({ toast, myFollowers }) {
+  const [snapshots, setSnapshots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await sbNew(`competitor_snapshots?user_id=eq.${ANALYTICS_USER_ID}&select=*&order=snapshot_date.asc`);
+      setSnapshots(d || []);
+    } catch (e) { toast('Errore caricamento concorrenti: ' + e.message); }
+    setLoading(false);
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/capture-competitor-snapshot`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: ANALYTICS_USER_ID }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore: ' + data.error);
+      else toast('✅ Dati concorrenti aggiornati');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setRefreshing(false);
+    load();
+  };
+
+  if (loading) return null;
+
+  // group by competitor, keep latest + first snapshot
+  const byCompetitor = {};
+  for (const s of snapshots) {
+    if (!byCompetitor[s.competitor_username]) byCompetitor[s.competitor_username] = [];
+    byCompetitor[s.competitor_username].push(s);
+  }
+  const competitors = Object.keys(byCompetitor).map(username => {
+    const rows = byCompetitor[username];
+    const latest = rows[rows.length - 1];
+    const first = rows[0];
+    const growth = rows.length > 1 ? latest.followers_count - first.followers_count : null;
+    return { username, latest, first, growth, days: rows.length };
+  }).sort((a, b) => (b.latest.followers_count || 0) - (a.latest.followers_count || 0));
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div className="draft-row" style={{ marginBottom: 10 }}>
+        <span className="section-title" style={{ marginBottom: 0 }}>Confronto con i concorrenti</span>
+        <button className="btn btn-sm" onClick={refresh} disabled={refreshing}>
+          {refreshing ? 'Aggiorno...' : <><i className="ti ti-refresh" /> Aggiorna concorrenti</>}
+        </button>
+      </div>
+
+      {!competitors.length && <div className="empty">Nessun dato concorrenti ancora. Premi "Aggiorna concorrenti".</div>}
+
+      {!!competitors.length && (
+        <div className="draft-grid">
+          {myFollowers != null && (
+            <div className="draft-card" style={{ padding: 16, borderColor: 'var(--accent)' }}>
+              <span className="draft-topic">Tu (@neuroplasticity_training)</span>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{myFollowers.toLocaleString('it-IT')}</div>
+              <span className="draft-score">follower</span>
+            </div>
+          )}
+          {competitors.map(c => (
+            <div key={c.username} className="draft-card" style={{ padding: 16 }}>
+              <span className="draft-topic">@{c.username}</span>
+              {c.latest.competitor_full_name && <div className="draft-score" style={{ marginBottom: 6 }}>{c.latest.competitor_full_name}</div>}
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{(c.latest.followers_count ?? 0).toLocaleString('it-IT')}</div>
+              <span className="draft-score">follower</span>
+              {c.growth !== null && (
+                <div style={{ marginTop: 8 }}>
+                  <Badge color={c.growth >= 0 ? 'green' : 'pink'}>
+                    {c.growth >= 0 ? '▲' : '▼'} {c.growth >= 0 ? '+' : ''}{c.growth} su {c.days} giorni
+                  </Badge>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Crescita({ toast }) {
   const [snapshots, setSnapshots] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -1017,6 +1106,8 @@ function Crescita({ toast }) {
           </div>
         </div>
       )}
+
+      <CompetitorComparison toast={toast} myFollowers={last?.followers_count} />
 
       {profile && (
         <div className="draft-grid" style={{ marginBottom: 24 }}>
