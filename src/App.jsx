@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
 const FB_APP_ID = '1314288600705533';
 const FB_REDIRECT_URI = window.location.origin + '/';
+const FB_LOGIN_CONFIG_ID = '1030482036191279';
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
@@ -412,7 +413,7 @@ function Config({ toast }) {
   const connectFacebook = () => {
     const state = crypto.randomUUID();
     sessionStorage.setItem('fb_oauth_state', state);
-    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&state=${state}&scope=pages_show_list,pages_manage_posts,pages_read_engagement&response_type=code`;
+    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&state=${state}&config_id=${FB_LOGIN_CONFIG_ID}&response_type=code`;
     window.location.href = url;
   };
 
