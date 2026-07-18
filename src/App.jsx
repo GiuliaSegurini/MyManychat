@@ -8,6 +8,8 @@ const IG_USER_ID = '26770455472615914';
 const SUPABASE_URL_NEW = 'https://yczjxadbbfyluxswqjnn.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljemp4YWRiYmZ5bHV4c3dxam5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTYwMDAsImV4cCI6MjA5NTgzMjAwMH0.hYP1o16qSIwIvmxGAka91owKtFPZ-1RzIE3nTP5Emv0';
 const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
+const FB_APP_ID = '1314288600705533';
+const FB_REDIRECT_URI = window.location.origin + '/';
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
@@ -394,12 +396,57 @@ function Leads({ toast }) {
 
 function Config({ toast }) {
   const copy = t => { navigator.clipboard.writeText(t); toast('Copiato!'); };
+  const [fbProfile, setFbProfile] = useState(null);
+  const [loadingFb, setLoadingFb] = useState(true);
+
+  const loadFb = useCallback(async () => {
+    try {
+      const rows = await sbNew(`profiles?id=eq.${ANALYTICS_USER_ID}&select=fb_page_name,fb_page_id,fb_token_expires_at`);
+      setFbProfile(rows?.[0] || null);
+    } catch (e) { /* mostriamo comunque il bottone di collegamento */ }
+    setLoadingFb(false);
+  }, []);
+
+  useEffect(() => { loadFb(); }, [loadFb]);
+
+  const connectFacebook = () => {
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('fb_oauth_state', state);
+    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&state=${state}&scope=pages_show_list,pages_manage_posts,pages_read_engagement&response_type=code`;
+    window.location.href = url;
+  };
+
+  const fbConnected = fbProfile?.fb_page_id;
+  const fbExpiringSoon = fbProfile?.fb_token_expires_at && (new Date(fbProfile.fb_token_expires_at) - Date.now()) < 7 * 24 * 60 * 60 * 1000;
+
   return (
     <div className="panel">
       <div className="panel-header"><h1><i className="ti ti-settings" /> Configurazione</h1></div>
       <div className="section-title">Credenziali attive</div>
       <div className="card">
-        {[['Account Instagram','@neuroplasticity_training ✓'],['Page ID','959429044971851'],['App ID Meta','1314288600705533'],['Database','Supabase eu-west-1 ✓'],['AI Vision','Claude Opus ✓']].map(([label, val]) => <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>)}
+        {[['Account Instagram','@neuroplasticity_training ✓'],['App ID Meta','1314288600705533'],['Database','Supabase eu-west-1 ✓'],['AI Vision','Claude Opus ✓']].map(([label, val]) => <div key={label} className="config-row"><span className="config-label">{label}</span><span style={{ color: '#4ade80', fontSize: 13 }}>{val}</span></div>)}
+      </div>
+      <div className="section-title" style={{ marginTop: 20 }}>Pagina Facebook</div>
+      <div className="card">
+        {loadingFb && <div className="config-row"><span className="config-label">Stato</span><span style={{ fontSize: 13 }}>Caricamento...</span></div>}
+        {!loadingFb && fbConnected && (
+          <>
+            <div className="config-row"><span className="config-label">Pagina collegata</span><span style={{ color: '#4ade80', fontSize: 13 }}>{fbProfile.fb_page_name} ✓</span></div>
+            <div className="config-row"><span className="config-label">Page ID</span><span style={{ fontSize: 13 }}>{fbProfile.fb_page_id}</span></div>
+            {fbExpiringSoon && (
+              <div className="config-row">
+                <span className="config-label" style={{ color: '#f59e0b' }}>Token in scadenza a breve</span>
+                <button className="btn btn-sm" onClick={connectFacebook}>Ricollega</button>
+              </div>
+            )}
+          </>
+        )}
+        {!loadingFb && !fbConnected && (
+          <div className="config-row">
+            <span className="config-label">Nessuna pagina collegata</span>
+            <button className="btn btn-primary btn-sm" onClick={connectFacebook}>Collega Pagina Facebook</button>
+          </div>
+        )}
       </div>
       <div className="section-title" style={{ marginTop: 20 }}>Webhook Meta</div>
       <div className="card">
@@ -509,6 +556,7 @@ function BozzeVirali({ toast }) {
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(null);
   const [publishing, setPublishing] = useState({});
+  const [publishingFb, setPublishingFb] = useState({});
   const [edits, setEdits] = useState({});
 
   const load = useCallback(async () => {
@@ -670,6 +718,24 @@ function BozzeVirali({ toast }) {
     load();
   };
 
+  const publishFb = async (id) => {
+    setPublishingFb(p => ({ ...p, [id]: true }));
+    const edit = edits[id];
+    try {
+      if (edit) await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', body: edit, prefer: 'return=minimal' });
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/publish-draft-fb`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: id }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore pubblicazione Facebook: ' + data.error);
+      else toast('✅ Pubblicato su Facebook!');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setPublishingFb(p => ({ ...p, [id]: false }));
+    load();
+  };
+
   const discard = async (id) => {
     if (!window.confirm('Scartare questa bozza?')) return;
     try {
@@ -781,7 +847,8 @@ function BozzeVirali({ toast }) {
                 <input value={val(d, 'cta_suggestion') || ''} onChange={e => setEdit(d.id, 'cta_suggestion', e.target.value)} disabled={d.status === 'published'} />
               </div>
               {d.why_suggested && <p className="draft-why">{d.why_suggested}</p>}
-              {d.status === 'failed' && d.publish_error && <p className="draft-error">{d.publish_error}</p>}
+              {d.status === 'failed' && d.publish_error && <p className="draft-error">IG: {d.publish_error}</p>}
+              {d.fb_status === 'failed' && d.fb_publish_error && <p className="draft-error">FB: {d.fb_publish_error}</p>}
               {d.status === 'scheduled' && d.scheduled_for && (
                 <p className="draft-score">Programmata per: {new Date(d.scheduled_for).toLocaleString('it-IT')}</p>
               )}
@@ -798,10 +865,17 @@ function BozzeVirali({ toast }) {
               {d.status !== 'published' && d.status !== 'scheduled' && (
                 <div className="draft-actions">
                   <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => publish(d.id)} disabled={publishing[d.id] || d.status === 'publishing'}>
-                    {publishing[d.id] || d.status === 'publishing' ? 'Pubblicazione...' : 'Pubblica ora'}
+                    {publishing[d.id] || d.status === 'publishing' ? 'Pubblicazione...' : 'Pubblica su Instagram'}
                   </button>
                   <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => schedule(d.id)}>Programma</button>
                   <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
+                </div>
+              )}
+              {d.fb_status !== 'published' && (
+                <div className="draft-actions">
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => publishFb(d.id)} disabled={publishingFb[d.id] || d.fb_status === 'publishing'}>
+                    {publishingFb[d.id] || d.fb_status === 'publishing' ? 'Pubblicazione...' : 'Pubblica su Facebook'}
+                  </button>
                 </div>
               )}
               {d.status === 'scheduled' && (
@@ -811,7 +885,8 @@ function BozzeVirali({ toast }) {
                   <button className="icon-btn danger" onClick={() => discard(d.id)}><i className="ti ti-trash" /></button>
                 </div>
               )}
-              {d.status === 'published' && d.published_media_id && <span className="draft-score">media ID: {d.published_media_id}</span>}
+              {d.status === 'published' && d.published_media_id && <span className="draft-score">IG media ID: {d.published_media_id}</span>}
+              {d.fb_status === 'published' && d.fb_post_id && <span className="draft-score">FB post ID: {d.fb_post_id}</span>}
               {(d.resource_pdf_url || d.stripe_payment_link) && (
                 <div className="draft-row" style={{ marginTop: 6, gap: 10 }}>
                   {d.resource_pdf_url && <a href={d.resource_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>📄 Vedi PDF guida</a>}
@@ -1410,6 +1485,41 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const error = params.get('error');
+    if (!code && !error) return;
+    const cleanUrl = () => window.history.replaceState(null, '', window.location.pathname);
+    if (error) {
+      toast('Collegamento Facebook annullato');
+      cleanUrl();
+      return;
+    }
+    const state = params.get('state');
+    const savedState = sessionStorage.getItem('fb_oauth_state');
+    sessionStorage.removeItem('fb_oauth_state');
+    if (!state || state !== savedState) {
+      toast('Errore: stato OAuth non valido, riprova il collegamento');
+      cleanUrl();
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/fb-oauth-callback`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, redirect_uri: FB_REDIRECT_URI, user_id: ANALYTICS_USER_ID }),
+        });
+        const data = await res.json();
+        if (data.error) toast('Errore collegamento Facebook: ' + data.error);
+        else toast(`✅ Pagina Facebook collegata: ${data.page_name}`);
+      } catch (e) { toast('Errore: ' + e.message); }
+      cleanUrl();
+      setPanel('config');
+    })();
+  }, [toast]);
 
   const handleLogout = async () => {
     await supabaseAuth.auth.signOut();
