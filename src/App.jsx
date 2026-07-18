@@ -911,6 +911,32 @@ function Performance({ toast }) {
                   : <span style={{ fontSize: 20, fontWeight: 700 }}>{report.funnel.pagamenti_completati} — €{report.funnel.fatturato_euro.toFixed(2)}</span>}
               </div>
             </div>
+            {report.benchmark_concorrenti && (
+              <div className="draft-card" style={{ padding: 16 }}>
+                <span className="draft-topic" style={{ marginBottom: 10, display: 'block' }}>Benchmark vs concorrenti</span>
+                <div className="form-group" style={{ marginBottom: 10 }}>
+                  <label>Tu</label>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700 }}>{(report.benchmark_concorrenti.tu.followers ?? 0).toLocaleString('it-IT')} follower</span>
+                    {report.benchmark_concorrenti.tu.growth_giornaliero_medio != null && (
+                      <span style={{ fontSize: 12, color: 'var(--text3)' }}>{report.benchmark_concorrenti.tu.growth_giornaliero_medio >= 0 ? '+' : ''}{report.benchmark_concorrenti.tu.growth_giornaliero_medio}/giorno</span>
+                    )}
+                  </div>
+                </div>
+                {report.benchmark_concorrenti.concorrenti.map(c => (
+                  <div key={c.username} className="form-group" style={{ marginBottom: 6 }}>
+                    <label>@{c.username}</label>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{(c.followers ?? 0).toLocaleString('it-IT')} follower</span>
+                      {c.growth_giornaliero_medio != null && <span style={{ fontSize: 11, color: 'var(--text3)' }}>{c.growth_giornaliero_medio >= 0 ? '+' : ''}{c.growth_giornaliero_medio}/giorno</span>}
+                      {c.engagement_rate_stimato_top_post != null && <span style={{ fontSize: 11, color: 'var(--accent2)' }}>ER stimato top post: {(c.engagement_rate_stimato_top_post * 100).toFixed(1)}%</span>}
+                    </div>
+                  </div>
+                ))}
+                <p className="draft-score" style={{ marginTop: 8 }}>La crescita concorrenti appare dopo qualche giorno di raccolta dati (parte automaticamente ogni giorno). L'ER stimato usa like+commenti sui loro post più virali / follower attuali — non è un vero ER (non abbiamo il reach), quindi può superare il 100% su post diventati virali oltre la loro base follower.</p>
+              </div>
+            )}
+
           </div>
           <p className="draft-score">Generato: {new Date(report.generated_at).toLocaleString('it-IT')}</p>
         </>
