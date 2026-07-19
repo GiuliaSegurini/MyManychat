@@ -11,6 +11,8 @@ const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
 const FB_APP_ID = '1314288600705533';
 const FB_REDIRECT_URI = window.location.origin + '/';
 const FB_LOGIN_CONFIG_ID = '2192704168290362';
+const TIKTOK_CLIENT_KEY = 'awfha6z8vhwuyzsc';
+const TIKTOK_REDIRECT_URI = window.location.origin + '/';
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
@@ -399,6 +401,8 @@ function Config({ toast }) {
   const copy = t => { navigator.clipboard.writeText(t); toast('Copiato!'); };
   const [fbProfile, setFbProfile] = useState(null);
   const [loadingFb, setLoadingFb] = useState(true);
+  const [tiktokProfile, setTiktokProfile] = useState(null);
+  const [loadingTiktok, setLoadingTiktok] = useState(true);
 
   const loadFb = useCallback(async () => {
     try {
@@ -408,7 +412,15 @@ function Config({ toast }) {
     setLoadingFb(false);
   }, []);
 
-  useEffect(() => { loadFb(); }, [loadFb]);
+  const loadTiktok = useCallback(async () => {
+    try {
+      const rows = await sbNew(`profiles?id=eq.${ANALYTICS_USER_ID}&select=tiktok_username,tiktok_open_id,tiktok_refresh_token_expires_at`);
+      setTiktokProfile(rows?.[0] || null);
+    } catch (e) { /* mostriamo comunque il bottone di collegamento */ }
+    setLoadingTiktok(false);
+  }, []);
+
+  useEffect(() => { loadFb(); loadTiktok(); }, [loadFb, loadTiktok]);
 
   const connectFacebook = () => {
     const state = crypto.randomUUID();
@@ -417,8 +429,17 @@ function Config({ toast }) {
     window.location.href = url;
   };
 
+  const connectTiktok = () => {
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('tiktok_oauth_state', state);
+    const url = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&response_type=code&scope=user.info.basic,video.publish&redirect_uri=${encodeURIComponent(TIKTOK_REDIRECT_URI)}&state=${state}`;
+    window.location.href = url;
+  };
+
   const fbConnected = fbProfile?.fb_page_id;
   const fbExpiringSoon = fbProfile?.fb_token_expires_at && (new Date(fbProfile.fb_token_expires_at) - Date.now()) < 7 * 24 * 60 * 60 * 1000;
+  const tiktokConnected = tiktokProfile?.tiktok_open_id;
+  const tiktokExpiringSoon = tiktokProfile?.tiktok_refresh_token_expires_at && (new Date(tiktokProfile.tiktok_refresh_token_expires_at) - Date.now()) < 7 * 24 * 60 * 60 * 1000;
 
   return (
     <div className="panel">
@@ -446,6 +467,27 @@ function Config({ toast }) {
           <div className="config-row">
             <span className="config-label">Nessuna pagina collegata</span>
             <button className="btn btn-primary btn-sm" onClick={connectFacebook}>Collega Pagina Facebook</button>
+          </div>
+        )}
+      </div>
+      <div className="section-title" style={{ marginTop: 20 }}>TikTok</div>
+      <div className="card">
+        {loadingTiktok && <div className="config-row"><span className="config-label">Stato</span><span style={{ fontSize: 13 }}>Caricamento...</span></div>}
+        {!loadingTiktok && tiktokConnected && (
+          <>
+            <div className="config-row"><span className="config-label">Account collegato</span><span style={{ color: '#4ade80', fontSize: 13 }}>{tiktokProfile.tiktok_username || tiktokProfile.tiktok_open_id} ✓</span></div>
+            {tiktokExpiringSoon && (
+              <div className="config-row">
+                <span className="config-label" style={{ color: '#f59e0b' }}>Token in scadenza a breve</span>
+                <button className="btn btn-sm" onClick={connectTiktok}>Ricollega</button>
+              </div>
+            )}
+          </>
+        )}
+        {!loadingTiktok && !tiktokConnected && (
+          <div className="config-row">
+            <span className="config-label">Nessun account collegato</span>
+            <button className="btn btn-primary btn-sm" onClick={connectTiktok}>Collega TikTok</button>
           </div>
         )}
       </div>
@@ -558,6 +600,7 @@ function BozzeVirali({ toast }) {
   const [syncProgress, setSyncProgress] = useState(null);
   const [publishing, setPublishing] = useState({});
   const [publishingFb, setPublishingFb] = useState({});
+  const [publishingTiktok, setPublishingTiktok] = useState({});
   const [edits, setEdits] = useState({});
 
   const load = useCallback(async () => {
@@ -737,6 +780,24 @@ function BozzeVirali({ toast }) {
     load();
   };
 
+  const publishTiktok = async (id) => {
+    setPublishingTiktok(p => ({ ...p, [id]: true }));
+    const edit = edits[id];
+    try {
+      if (edit) await sbNew(`editorial_posts?id=eq.${id}`, { method: 'PATCH', body: edit, prefer: 'return=minimal' });
+      const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/publish-draft-tiktok`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft_id: id }),
+      });
+      const data = await res.json();
+      if (data.error) toast('Errore pubblicazione TikTok: ' + data.error);
+      else toast('✅ Pubblicato su TikTok!');
+    } catch (e) { toast('Errore: ' + e.message); }
+    setPublishingTiktok(p => ({ ...p, [id]: false }));
+    load();
+  };
+
   const discard = async (id) => {
     if (!window.confirm('Scartare questa bozza?')) return;
     try {
@@ -850,6 +911,7 @@ function BozzeVirali({ toast }) {
               {d.why_suggested && <p className="draft-why">{d.why_suggested}</p>}
               {d.status === 'failed' && d.publish_error && <p className="draft-error">IG: {d.publish_error}</p>}
               {d.fb_status === 'failed' && d.fb_publish_error && <p className="draft-error">FB: {d.fb_publish_error}</p>}
+              {d.tiktok_status === 'failed' && d.tiktok_publish_error && <p className="draft-error">TikTok: {d.tiktok_publish_error}</p>}
               {d.status === 'scheduled' && d.scheduled_for && (
                 <p className="draft-score">Programmata per: {new Date(d.scheduled_for).toLocaleString('it-IT')}</p>
               )}
@@ -879,6 +941,13 @@ function BozzeVirali({ toast }) {
                   </button>
                 </div>
               )}
+              {d.tiktok_status !== 'published' && (
+                <div className="draft-actions">
+                  <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => publishTiktok(d.id)} disabled={publishingTiktok[d.id] || d.tiktok_status === 'publishing'}>
+                    {publishingTiktok[d.id] || d.tiktok_status === 'publishing' ? 'Pubblicazione...' : 'Pubblica su TikTok'}
+                  </button>
+                </div>
+              )}
               {d.status === 'scheduled' && (
                 <div className="draft-actions">
                   <button className="btn btn-sm" style={{ flex: 1 }} onClick={() => saveEdits(d.id)} disabled={!edits[d.id]}>Salva modifiche</button>
@@ -888,6 +957,7 @@ function BozzeVirali({ toast }) {
               )}
               {d.status === 'published' && d.published_media_id && <span className="draft-score">IG media ID: {d.published_media_id}</span>}
               {d.fb_status === 'published' && d.fb_post_id && <span className="draft-score">FB post ID: {d.fb_post_id}</span>}
+              {d.tiktok_status === 'published' && d.tiktok_publish_id && <span className="draft-score">TikTok publish ID: {d.tiktok_publish_id}</span>}
               {(d.resource_pdf_url || d.stripe_payment_link) && (
                 <div className="draft-row" style={{ marginTop: 6, gap: 10 }}>
                   {d.resource_pdf_url && <a href={d.resource_pdf_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent2)' }}>📄 Vedi PDF guida</a>}
@@ -1493,29 +1563,44 @@ export default function App() {
     const error = params.get('error');
     if (!code && !error) return;
     const cleanUrl = () => window.history.replaceState(null, '', window.location.pathname);
+    const state = params.get('state');
+    const fbSavedState = sessionStorage.getItem('fb_oauth_state');
+    const tiktokSavedState = sessionStorage.getItem('tiktok_oauth_state');
+    const provider = state && state === fbSavedState ? 'facebook' : state && state === tiktokSavedState ? 'tiktok' : null;
+    sessionStorage.removeItem('fb_oauth_state');
+    sessionStorage.removeItem('tiktok_oauth_state');
+
     if (error) {
-      toast('Collegamento Facebook annullato');
+      toast(provider === 'tiktok' ? 'Collegamento TikTok annullato' : 'Collegamento Facebook annullato');
       cleanUrl();
       return;
     }
-    const state = params.get('state');
-    const savedState = sessionStorage.getItem('fb_oauth_state');
-    sessionStorage.removeItem('fb_oauth_state');
-    if (!state || state !== savedState) {
+    if (!provider) {
       toast('Errore: stato OAuth non valido, riprova il collegamento');
       cleanUrl();
       return;
     }
     (async () => {
       try {
-        const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/fb-oauth-callback`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, redirect_uri: FB_REDIRECT_URI, user_id: ANALYTICS_USER_ID }),
-        });
-        const data = await res.json();
-        if (data.error) toast('Errore collegamento Facebook: ' + data.error);
-        else toast(`✅ Pagina Facebook collegata: ${data.page_name}`);
+        if (provider === 'tiktok') {
+          const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/tiktok-oauth-callback`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, redirect_uri: TIKTOK_REDIRECT_URI, user_id: ANALYTICS_USER_ID }),
+          });
+          const data = await res.json();
+          if (data.error) toast('Errore collegamento TikTok: ' + data.error);
+          else toast(`✅ Account TikTok collegato${data.username ? ': ' + data.username : ''}!`);
+        } else {
+          const res = await fetch(`${SUPABASE_URL_NEW}/functions/v1/fb-oauth-callback`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, redirect_uri: FB_REDIRECT_URI, user_id: ANALYTICS_USER_ID }),
+          });
+          const data = await res.json();
+          if (data.error) toast('Errore collegamento Facebook: ' + data.error);
+          else toast(`✅ Pagina Facebook collegata: ${data.page_name}`);
+        }
       } catch (e) { toast('Errore: ' + e.message); }
       cleanUrl();
       setPanel('config');
