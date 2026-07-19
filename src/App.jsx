@@ -413,7 +413,7 @@ function Config({ toast }) {
   const connectFacebook = () => {
     const state = crypto.randomUUID();
     sessionStorage.setItem('fb_oauth_state', state);
-    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&state=${state}&config_id=${FB_LOGIN_CONFIG_ID}&response_type=code`;
+    const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${FB_APP_ID}&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}&state=${state}&config_id=${FB_LOGIN_CONFIG_ID}&response_type=code&auth_type=rerequest`;
     window.location.href = url;
   };
 
