@@ -432,7 +432,7 @@ function Config({ toast }) {
   const connectTiktok = () => {
     const state = crypto.randomUUID();
     sessionStorage.setItem('tiktok_oauth_state', state);
-    const url = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&response_type=code&scope=user.info.basic,video.publish&redirect_uri=${encodeURIComponent(TIKTOK_REDIRECT_URI)}&state=${state}`;
+    const url = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&response_type=code&scope=user.info.basic&redirect_uri=${encodeURIComponent(TIKTOK_REDIRECT_URI)}&state=${state}`;
     window.location.href = url;
   };
 
