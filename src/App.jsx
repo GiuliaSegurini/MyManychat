@@ -10,7 +10,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ANALYTICS_USER_ID = '2f643ddb-baf0-49b0-901b-891f5776ed73';
 const FB_APP_ID = '1314288600705533';
 const FB_REDIRECT_URI = window.location.origin + '/';
-const FB_LOGIN_CONFIG_ID = '1030482036191279';
+const FB_LOGIN_CONFIG_ID = '1577090887336444';
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
