@@ -103,6 +103,9 @@ function LoginScreen({ onLogin }) {
             {loading ? 'Accesso...' : 'Accedi'}
           </button>
         </form>
+        <p style={{textAlign:'center',fontSize:'12px',color:'#666',marginTop:'20px',marginBottom:0}}>
+          <a href="/termini-e-condizioni.html" style={{color:'#888'}}>Termini e Condizioni</a>
+        </p>
       </div>
     </div>
   );
