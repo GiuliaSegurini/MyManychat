@@ -14,6 +14,7 @@ const FB_LOGIN_CONFIG_ID = '2192704168290362';
 const TIKTOK_CLIENT_KEY = 'awfha6z8vhwuyzsc';
 const TIKTOK_REDIRECT_URI = window.location.origin + '/';
 const REVIEWER_EMAIL = 'tiktok-reviewer@segurinidatalab.online';
+const REVIEWER_SESSION_MAX_MS = 60 * 60 * 1000; // 60 minuti, poi logout forzato anche senza nuovo login
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
@@ -1644,12 +1645,27 @@ export default function App() {
           setReviewerBlockedMsg('Questo accesso è monouso ed è già stato utilizzato.');
           return;
         }
-        await supabaseAuth.auth.updateUser({ data: { reviewer_used: true } });
+        await supabaseAuth.auth.updateUser({ data: { reviewer_used: true, reviewer_login_at: new Date().toISOString() } });
       }
       setSession(session);
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const isReviewer = session?.user?.email?.toLowerCase() === REVIEWER_EMAIL;
+    if (!isReviewer) return;
+    const checkExpiry = () => {
+      const loginAt = session.user.user_metadata?.reviewer_login_at;
+      if (loginAt && Date.now() - new Date(loginAt).getTime() > REVIEWER_SESSION_MAX_MS) {
+        supabaseAuth.auth.signOut();
+        setReviewerBlockedMsg('Sessione scaduta.');
+      }
+    };
+    checkExpiry();
+    const interval = setInterval(checkExpiry, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [session]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
