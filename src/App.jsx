@@ -55,7 +55,11 @@ function Modal({ open, onClose, title, children }) {
   );
 }
 
+const fieldStyle = {width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'12px',boxSizing:'border-box'};
+const primaryBtnStyle = {width:'100%',padding:'12px',borderRadius:'8px',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'15px',fontWeight:'600',border:'none',cursor:'pointer'};
+
 function LoginScreen({ onLogin }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'forgot' | 'sent'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -71,41 +75,110 @@ function LoginScreen({ onLogin }) {
     else onLogin();
   };
 
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const { error } = await supabaseAuth.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/',
+    });
+    setLoading(false);
+    if (error) setError('Errore: ' + error.message);
+    else setMode('sent');
+  };
+
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117'}}>
       <div style={{background:'#1a1d27',padding:'40px',borderRadius:'16px',width:'360px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}>
         <div style={{textAlign:'center',marginBottom:'32px'}}>
           <div style={{fontSize:'32px',marginBottom:'8px'}}>🧠</div>
           <h1 style={{color:'white',fontSize:'22px',fontWeight:'700',margin:0}}>MyManychat</h1>
-          <p style={{color:'#888',fontSize:'14px',marginTop:'8px'}}>Accedi per continuare</p>
+          <p style={{color:'#888',fontSize:'14px',marginTop:'8px'}}>
+            {mode === 'login' ? 'Accedi per continuare' : mode === 'forgot' ? 'Recupera la password' : 'Controlla la tua email'}
+          </p>
         </div>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'12px',boxSizing:'border-box'}}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={{width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'16px',boxSizing:'border-box'}}
-          />
-          {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{width:'100%',padding:'12px',borderRadius:'8px',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'15px',fontWeight:'600',border:'none',cursor:'pointer',opacity:loading?0.7:1}}
-          >
-            {loading ? 'Accesso...' : 'Accedi'}
-          </button>
-        </form>
+
+        {mode === 'login' && (
+          <form onSubmit={handleSubmit}>
+            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={fieldStyle} />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={{...fieldStyle,marginBottom:'16px'}} />
+            {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+            <button type="submit" disabled={loading} style={{...primaryBtnStyle,opacity:loading?0.7:1}}>
+              {loading ? 'Accesso...' : 'Accedi'}
+            </button>
+            <p style={{textAlign:'center',fontSize:'13px',marginTop:'16px',marginBottom:0}}>
+              <button type="button" onClick={() => { setMode('forgot'); setError(''); }} style={{background:'none',border:'none',color:'#888',cursor:'pointer',fontSize:'13px',textDecoration:'underline',padding:0}}>
+                Password dimenticata?
+              </button>
+            </p>
+          </form>
+        )}
+
+        {mode === 'forgot' && (
+          <form onSubmit={handleForgot}>
+            <p style={{color:'#888',fontSize:'13px',marginTop:0,marginBottom:'16px'}}>Inserisci la tua email: ti mandiamo un link per impostare una nuova password.</p>
+            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={{...fieldStyle,marginBottom:'16px'}} />
+            {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+            <button type="submit" disabled={loading} style={{...primaryBtnStyle,opacity:loading?0.7:1}}>
+              {loading ? 'Invio...' : 'Invia link di recupero'}
+            </button>
+            <p style={{textAlign:'center',fontSize:'13px',marginTop:'16px',marginBottom:0}}>
+              <button type="button" onClick={() => { setMode('login'); setError(''); }} style={{background:'none',border:'none',color:'#888',cursor:'pointer',fontSize:'13px',textDecoration:'underline',padding:0}}>
+                ← Torna al login
+              </button>
+            </p>
+          </form>
+        )}
+
+        {mode === 'sent' && (
+          <p style={{color:'#ccc',fontSize:'14px',textAlign:'center'}}>
+            Se l'indirizzo esiste, a breve ricevi un'email con il link per reimpostare la password.
+          </p>
+        )}
+
         <p style={{textAlign:'center',fontSize:'12px',color:'#666',marginTop:'20px',marginBottom:0}}>
           <a href="/termini-e-condizioni.html" style={{color:'#888'}}>Termini e Condizioni</a>
+          {' · '}
+          <a href="/privacy-policy.html" style={{color:'#888'}}>Privacy Policy</a>
         </p>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordScreen({ onDone }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (password.length < 6) { setError('La password deve avere almeno 6 caratteri'); return; }
+    if (password !== confirm) { setError('Le due password non coincidono'); return; }
+    setLoading(true);
+    const { error } = await supabaseAuth.auth.updateUser({ password });
+    setLoading(false);
+    if (error) setError('Errore: ' + error.message);
+    else onDone();
+  };
+
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0f1117'}}>
+      <div style={{background:'#1a1d27',padding:'40px',borderRadius:'16px',width:'360px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}>
+        <div style={{textAlign:'center',marginBottom:'32px'}}>
+          <div style={{fontSize:'32px',marginBottom:'8px'}}>🧠</div>
+          <h1 style={{color:'white',fontSize:'22px',fontWeight:'700',margin:0}}>Nuova password</h1>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <input type="password" placeholder="Nuova password" value={password} onChange={e => setPassword(e.target.value)} style={fieldStyle} />
+          <input type="password" placeholder="Conferma password" value={confirm} onChange={e => setConfirm(e.target.value)} style={{...fieldStyle,marginBottom:'16px'}} />
+          {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+          <button type="submit" disabled={loading} style={{...primaryBtnStyle,opacity:loading?0.7:1}}>
+            {loading ? 'Salvataggio...' : 'Salva password'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -1543,6 +1616,7 @@ function Crescita({ toast }) {
 export default function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
   const [stats, setStats] = useState({});
@@ -1554,7 +1628,8 @@ export default function App() {
       setSession(session);
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
       setSession(session);
     });
     return () => subscription.unsubscribe();
@@ -1649,6 +1724,10 @@ export default function App() {
         Caricamento...
       </div>
     );
+  }
+
+  if (passwordRecovery) {
+    return <ResetPasswordScreen onDone={() => { setPasswordRecovery(false); toast('Password aggiornata, ora sei loggata'); }} />;
   }
 
   if (!session) {
