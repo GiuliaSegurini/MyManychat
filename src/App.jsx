@@ -59,34 +59,22 @@ function Modal({ open, onClose, title, children }) {
 const fieldStyle = {width:'100%',padding:'12px',borderRadius:'8px',border:'1px solid #333',background:'#0f1117',color:'white',fontSize:'14px',marginBottom:'12px',boxSizing:'border-box'};
 const primaryBtnStyle = {width:'100%',padding:'12px',borderRadius:'8px',background:'linear-gradient(135deg,#667eea,#764ba2)',color:'white',fontSize:'15px',fontWeight:'600',border:'none',cursor:'pointer'};
 
-function LoginScreen({ onLogin }) {
+function LoginScreen({ onLogin, externalError }) {
   const [mode, setMode] = useState('login'); // 'login' | 'forgot' | 'sent'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const shownError = error || externalError;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
-    if (error) {
-      setLoading(false);
-      setError('Email o password errati');
-      return;
-    }
-    if (data.user?.email?.toLowerCase() === REVIEWER_EMAIL) {
-      if (data.user.user_metadata?.reviewer_used) {
-        await supabaseAuth.auth.signOut();
-        setLoading(false);
-        setError('Questo accesso è monouso ed è già stato utilizzato.');
-        return;
-      }
-      await supabaseAuth.auth.updateUser({ data: { reviewer_used: true } });
-    }
+    const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
     setLoading(false);
-    onLogin();
+    if (error) setError('Email o password errati');
+    else onLogin();
   };
 
   const handleForgot = async (e) => {
@@ -121,7 +109,7 @@ function LoginScreen({ onLogin }) {
           <form onSubmit={handleSubmit}>
             <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={fieldStyle} />
             <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} style={{...fieldStyle,marginBottom:'16px'}} />
-            {error && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{error}</p>}
+            {shownError && <p style={{color:'#ff6b6b',fontSize:'13px',marginBottom:'12px'}}>{shownError}</p>}
             <button type="submit" disabled={loading} style={{...primaryBtnStyle,opacity:loading?0.7:1}}>
               {loading ? 'Accesso...' : 'Accedi'}
             </button>
@@ -1636,6 +1624,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [reviewerBlockedMsg, setReviewerBlockedMsg] = useState('');
   const [panel, setPanel] = useState('dashboard');
   const [toastMsg, setToastMsg] = useState('');
   const [stats, setStats] = useState({});
@@ -1647,8 +1636,16 @@ export default function App() {
       setSession(session);
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (event, session) => {
       if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+      if (event === 'SIGNED_IN' && session?.user?.email?.toLowerCase() === REVIEWER_EMAIL) {
+        if (session.user.user_metadata?.reviewer_used) {
+          await supabaseAuth.auth.signOut();
+          setReviewerBlockedMsg('Questo accesso è monouso ed è già stato utilizzato.');
+          return;
+        }
+        await supabaseAuth.auth.updateUser({ data: { reviewer_used: true } });
+      }
       setSession(session);
     });
     return () => subscription.unsubscribe();
@@ -1750,7 +1747,7 @@ export default function App() {
   }
 
   if (!session) {
-    return <LoginScreen onLogin={() => {}} />;
+    return <LoginScreen onLogin={() => {}} externalError={reviewerBlockedMsg} />;
   }
 
   return (
