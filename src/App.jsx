@@ -13,6 +13,7 @@ const FB_REDIRECT_URI = window.location.origin + '/';
 const FB_LOGIN_CONFIG_ID = '2192704168290362';
 const TIKTOK_CLIENT_KEY = 'awfha6z8vhwuyzsc';
 const TIKTOK_REDIRECT_URI = window.location.origin + '/';
+const REVIEWER_EMAIL = 'tiktok-reviewer@segurinidatalab.online';
 
 const supabaseAuth = createClient(SUPABASE_URL_NEW, SUPABASE_ANON_KEY);
 
@@ -69,16 +70,34 @@ function LoginScreen({ onLogin }) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      setError('Email o password errati');
+      return;
+    }
+    if (data.user?.email?.toLowerCase() === REVIEWER_EMAIL) {
+      if (data.user.user_metadata?.reviewer_used) {
+        await supabaseAuth.auth.signOut();
+        setLoading(false);
+        setError('Questo accesso è monouso ed è già stato utilizzato.');
+        return;
+      }
+      await supabaseAuth.auth.updateUser({ data: { reviewer_used: true } });
+    }
     setLoading(false);
-    if (error) setError('Email o password errati');
-    else onLogin();
+    onLogin();
   };
 
   const handleForgot = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    if (email.trim().toLowerCase() === REVIEWER_EMAIL) {
+      setLoading(false);
+      setMode('sent');
+      return;
+    }
     const { error } = await supabaseAuth.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/',
     });
