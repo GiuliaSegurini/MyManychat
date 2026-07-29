@@ -389,7 +389,7 @@ function Keywords({ toast }) {
   const [kw, setKw] = useState(''); const [reply, setReply] = useState(''); const [flowId, setFlowId] = useState('');
   const load = useCallback(async () => { const [k, f] = await Promise.all([sb('ig_keywords?select=*&order=created_at.desc'), sb('ig_flows?select=id,name&is_active=eq.true')]); setKeywords(k); setFlows(f); }, []);
   useEffect(() => { load(); }, [load]);
-  const save = async () => { if (!kw || !reply) { toast('Inserisci keyword e risposta'); return; } await sb('ig_keywords', { method: 'POST', body: { keyword: kw.toLowerCase().trim(), reply_text: reply, flow_id: flowId || null, is_active: true } }); setKw(''); setReply(''); setFlowId(''); toast('Keyword aggiunta!'); load(); };
+  const save = async () => { if (!kw || !reply) { toast('Inserisci keyword e risposta'); return; } try { await sb('ig_keywords', { method: 'POST', body: { user_id: ANALYTICS_USER_ID, keyword: kw.toLowerCase().trim(), reply_text: reply, flow_id: flowId || null, is_active: true } }); setKw(''); setReply(''); setFlowId(''); toast('Keyword aggiunta!'); load(); } catch (e) { toast('Errore: ' + e.message); } };
   const toggle = async (id, val) => { await sb(`ig_keywords?id=eq.${id}`, { method: 'PATCH', body: { is_active: val } }); load(); };
   const del = async (id) => { if (!window.confirm('Eliminare?')) return; await sb(`ig_keywords?id=eq.${id}`, { method: 'DELETE', prefer: '' }); toast('Eliminata'); load(); };
   return (
